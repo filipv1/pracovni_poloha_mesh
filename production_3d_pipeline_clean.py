@@ -17,6 +17,8 @@ from pathlib import Path
 import json
 import pickle
 from scipy.spatial.transform import Rotation as R
+import matplotlib
+matplotlib.use('Agg')  # Set headless backend before importing pyplot
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
@@ -412,8 +414,14 @@ class ProfessionalVisualizer:
             print("No mesh data to render")
             return None
         
+        # Try Open3D first, fallback to matplotlib if headless issues
         if self.use_open3d and not mesh_data.get('is_wireframe', False):
-            return self._render_with_open3d(mesh_data, title, save_path, show_joints)
+            try:
+                return self._render_with_open3d(mesh_data, title, save_path, show_joints)
+            except Exception as e:
+                print(f"Open3D visualization failed: {e}")
+                print("Using matplotlib fallback...")
+                return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
         else:
             return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
     
@@ -455,27 +463,46 @@ class ProfessionalVisualizer:
         geometries.append(coord_frame)
         
         if save_path:
-            # Save high-quality screenshot
-            vis = o3d.visualization.Visualizer()
-            vis.create_window(window_name=title, width=1920, height=1080)
+            # Save high-quality screenshot (headless-compatible)
+            try:
+                vis = o3d.visualization.Visualizer()
+                # Try to create window with headless fallback
+                try:
+                    vis.create_window(window_name=title, width=1920, height=1080, visible=False)
+                except:
+                    # Fallback for headless environment
+                    vis.create_window(window_name=title, width=1920, height=1080)
             
             for geom in geometries:
                 vis.add_geometry(geom)
             
-            # Set optimal viewpoint
+            # Set optimal viewpoint (with headless safety)
             ctr = vis.get_view_control()
-            ctr.set_zoom(0.8)
-            ctr.set_front([0.0, 0.0, 1.0])
-            ctr.set_lookat([0.0, 0.0, 0.0])
-            ctr.set_up([0.0, 1.0, 0.0])
+            if ctr is not None:  # Safety check for headless environment
+                try:
+                    ctr.set_zoom(0.8)
+                    ctr.set_front([0.0, 0.0, 1.0])
+                    ctr.set_lookat([0.0, 0.0, 0.0])
+                    ctr.set_up([0.0, 1.0, 0.0])
+                except Exception as e:
+                    print(f"Warning: View control failed: {e}")
+                    # Use fallback matplotlib rendering
+                    vis.destroy_window()
+                    return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
             
-            vis.poll_events()
-            vis.update_renderer()
-            vis.capture_screen_image(save_path)
-            vis.destroy_window()
-            
-            print(f"OK High-quality render saved: {save_path}")
-            return save_path
+                vis.poll_events()
+                vis.update_renderer()
+                vis.capture_screen_image(save_path)
+                vis.destroy_window()
+                
+                print(f"OK High-quality render saved: {save_path}")
+                return save_path
+                
+            except Exception as e:
+                print(f"Open3D rendering failed: {e}")
+                print("Falling back to matplotlib rendering...")
+                # Fallback to matplotlib
+                return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
         else:
             # Interactive visualization
             o3d.visualization.draw_geometries(
