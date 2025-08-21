@@ -1,0 +1,95 @@
+# 3D Human Mesh Pipeline - GitIgnore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.Python
+
+# Virtual environments
+venv/
+env/
+mesh_env/
+trunk_analysis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Output directories
+output/
+*_output/
+production_output/
+quick_test_output/
+final_production_output/
+gpu_test_output/
+frames/
+temp_frames/
+
+# Generated files
+*.pkl
+*.mp4
+*.avi
+*.mov
+test.mp4
+sample.mp4
+
+# Images (except samples)
+*.png
+*.jpg
+*.jpeg
+!sample_*.png
+!final_*.png
+
+# SMPL-X models (too large for git)
+models/smplx/*.npz
+models/smplx/*.pkl
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS generated files
+.directory
+.fuse_hidden*
+
+# PyTorch
+*.pth
+*.pt
+
+# Large data files
+*.hdf5
+*.h5
+*.npy
+*.npz
+
+# Video processing temporary
+ffmpeg_*.log
+
+# RunPod specific
+.runpod/
+runpod_*.json
+
+# Claude Code
+.claude/
+*.claude

@@ -1,0 +1,43 @@
+# RunPod GPU Requirements for 3D Human Mesh Pipeline
+# Optimized for CUDA 11.8+ and RTX 4090/3090
+
+# Core ML/Vision libraries
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# 3D Processing
+smplx[all]>=0.1.28
+trimesh[easy]>=4.0.0
+open3d>=0.18.0
+
+# Computer Vision
+mediapipe>=0.10.8
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-image>=0.20.0
+matplotlib>=3.7.0
+
+# Video Processing
+imageio[ffmpeg]>=2.30.0
+ffmpeg-python>=0.2.0
+
+# Optimization
+chumpy>=0.70
+
+# Utilities
+tqdm>=4.65.0
+Pillow>=9.5.0
+pathlib2>=2.3.0
+
+# Optional GPU acceleration
+# pytorch3d  # Will be installed separately if available
+
+# Development tools
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+notebook>=6.5.0

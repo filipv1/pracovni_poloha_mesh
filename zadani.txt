@@ -1,0 +1,20 @@
+Moje zadání, které potřebuji vytvořit:
+
+Všiml jsem si, že cv-pipeline architekt částečně načnul to, co jsem již chtěl implementovat. Níže přikládám bližší specifiakce.
+Jediné, co v této implementaci budu chtít implementovat je nějaká varianta smpl fitteru/skinneru nebo něčeho co splní účel toho, že z 2d/3d mediapipe bodů, tak se vytvoří 3d human mesh. V této implementaci nechci vytvářet nic navíc, žádné nové přesnější výpočty, další analýzy ergonomie a podobně. Chci pouze implementovat tento human mesh. Jakmile bude implementovaný, poté až dostaneš další zadání.
+
+Co to má umět? Současný stav je takový, že mediapipe vygeneruje 33 3d bodů. Výsledný stav je, že bude vygenerovaný 3d mesh model lidského těla na základě vstupu. Vstup je jednokamerové mp4 video jednoho člověka, který pracuje. Vstup se poté přetvoří do 3d bodů pomocí mediapipe. A poté chci, ať se přetvoří do human mesh modelu.
+
+Takže výsledek této implementace bude, že na základě vstupu, tak se vytvoří výstup, který bude vizualizace 3d meshe v čase. Například to může být mp4 video ve 3d white space, které bude resemblovat to, jak se člověk v čase hýbe. Nebo můžeš udělat to, že stejně, jako je nyní implementována mediapipe vizualizace, tak se do output videa vloží i 3d hýbající se human mesh, který bude odpovídat té kostře.
+
+Pro to, abys byl schopný spustit a testovat projekt, tak musíš použít "conda activate trunk_analysis" protože mediapipe je podporováno pouze v určité verzi pythonu.
+
+Až budeš researchovat možnosti, tak se vyhni věcem, které jsou jen research prototype a budou extrémní dependecy hell, například romp a hybrik.
+
+Když jsem dělal svůj vlastní research, tak jsem narazil na easymocap na githubu, což vypadá přesně jako to, co bych chtěl implementovat. To jaký zvolíš framework nechám na tobě, toto je pouze moje doporučení a nevím, jestli se to hodí na náš projekt nebo třeba existuje lepší varianta.
+
+Než cokoliv začneš implementovat, tak udělej pořádný research frameworků a knihoven, který budeš používat, nastuduj si závislosti, dokumentaci, issues aŤ přesně víš, co máš očekávat, na co si dát pozor a čemu se vyhnout. Použij agenta na plánování a na research, ať máš veškeré relevantní informace do kontextu, detailní krok za krokem plán. Pokud to bude vhodné pro daný úkol, tak používej všechny agenty, které máš k dispozici.
+
+Výsledný výstup, čeho chci dosáhnout je toto: "vysledek.gif" - zde vidíš, jak je 3d mesh vizualizován na původním videu. Anebo se výsledný 3d mesh model může pohybovat v nějakém vizualizačním white space jako třeba matplotlib. Pointa toho je, že si chci poté na reálném videu ověřit, že to opravdu funguje.
+
+Pokud máš jakékoliv otázky, nebo nejasnosti, tak se doptej. Pokud ne, tak začni.
