@@ -67,9 +67,9 @@ class MeshVideoGenerator:
                 mesh_collection = Poly3DCollection(
                     mesh_polys, 
                     alpha=0.7, 
-                    facecolor='lightblue',
-                    edgecolor='none',
-                    shade=True
+                    facecolors='lightblue',  # facecolors with 's' for compatibility
+                    edgecolors='none',       # edgecolors with 's' for compatibility
+                    shade=False              # shade=False for headless environments
                 )
                 ax.add_collection3d(mesh_collection)
             
@@ -142,9 +142,9 @@ class MeshVideoGenerator:
                 mesh_collection = Poly3DCollection(
                     mesh_polys,
                     alpha=0.9,
-                    facecolor='cyan',
-                    edgecolor='blue',
-                    linewidth=0.1
+                    facecolors='cyan',     # facecolors with 's' for compatibility
+                    edgecolors='blue',     # edgecolors with 's' for compatibility
+                    linewidths=0.1         # linewidths with 's' for compatibility
                 )
                 ax.add_collection3d(mesh_collection)
             

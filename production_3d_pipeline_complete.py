@@ -165,9 +165,9 @@ class CompletePipeline:
             mesh_collection = Poly3DCollection(
                 mesh_polys, 
                 alpha=0.7, 
-                facecolor='lightblue',
-                edgecolor='none',
-                shade=True
+                facecolors='lightblue',  # facecolors with 's' for compatibility
+                edgecolors='none',       # edgecolors with 's' for compatibility
+                shade=False              # shade=False for headless environments
             )
             ax.add_collection3d(mesh_collection)
         

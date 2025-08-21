@@ -53,7 +53,7 @@ def visualize_mesh_properly(mesh_data, save_path=None, title="3D Human Mesh"):
                 mesh_polys.append(triangle)
         
         # Create 3D polygon collection
-        mesh_collection = Poly3DCollection(mesh_polys, alpha=0.3, facecolor='cyan', edgecolor='none')
+        mesh_collection = Poly3DCollection(mesh_polys, alpha=0.3, facecolors='cyan', edgecolors='none')
         ax1.add_collection3d(mesh_collection)
     
     # Add point cloud overlay
