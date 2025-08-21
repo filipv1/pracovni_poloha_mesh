@@ -104,13 +104,24 @@ python -m venv mesh_env
 source mesh_env/bin/activate
 ```
 
-### KROK 7: Instalace závislostí
+### KROK 7: Instalace závislostí (CONDA METODA - DOPORUČENO)
 
 ```bash
-# Spusťte automatický setup script
+# Automatický setup s conda prostředím (Python 3.9 pro MediaPipe)
+python setup_runpod_conda.py
+
+# Po dokončení aktivace prostředí:
+./activate_mesh_env.sh
+# NEBO: conda activate mesh_pipeline
+```
+
+### KROK 7B: Alternativa - Systémový Python
+
+```bash
+# Pokud preferujete systémový Python (může být nestabilní)
 python setup_runpod.py
 
-# Nebo manuálně:
+# Manuální instalace:
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 pip install smplx[all] trimesh open3d mediapipe opencv-python
 pip install matplotlib scipy scikit-image imageio[ffmpeg]
@@ -148,11 +159,13 @@ wget "YOUR_DRIVE_LINK" -O models/smplx/SMPLX_NEUTRAL.npz
 ### KROK 9: GPU Test
 
 ```bash
-# Aktivovat environment
-conda activate mesh_pipeline  # nebo source mesh_env/bin/activate
+# Aktivovat conda environment (DOPORUČENO)
+./activate_mesh_env.sh
+# NEBO: conda activate mesh_pipeline
 
 # Spustit GPU test
-python test_gpu_pipeline.py
+mesh-test
+# NEBO: python test_gpu_pipeline.py
 
 # Ověřit výsledky
 ls -la gpu_test_output/
