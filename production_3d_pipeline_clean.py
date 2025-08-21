@@ -472,24 +472,24 @@ class ProfessionalVisualizer:
                 except:
                     # Fallback for headless environment
                     vis.create_window(window_name=title, width=1920, height=1080)
-            
-            for geom in geometries:
-                vis.add_geometry(geom)
-            
-            # Set optimal viewpoint (with headless safety)
-            ctr = vis.get_view_control()
-            if ctr is not None:  # Safety check for headless environment
-                try:
-                    ctr.set_zoom(0.8)
-                    ctr.set_front([0.0, 0.0, 1.0])
-                    ctr.set_lookat([0.0, 0.0, 0.0])
-                    ctr.set_up([0.0, 1.0, 0.0])
-                except Exception as e:
-                    print(f"Warning: View control failed: {e}")
-                    # Use fallback matplotlib rendering
-                    vis.destroy_window()
-                    return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
-            
+                
+                for geom in geometries:
+                    vis.add_geometry(geom)
+                
+                # Set optimal viewpoint (with headless safety)
+                ctr = vis.get_view_control()
+                if ctr is not None:  # Safety check for headless environment
+                    try:
+                        ctr.set_zoom(0.8)
+                        ctr.set_front([0.0, 0.0, 1.0])
+                        ctr.set_lookat([0.0, 0.0, 0.0])
+                        ctr.set_up([0.0, 1.0, 0.0])
+                    except Exception as e:
+                        print(f"Warning: View control failed: {e}")
+                        # Use fallback matplotlib rendering
+                        vis.destroy_window()
+                        return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
+                
                 vis.poll_events()
                 vis.update_renderer()
                 vis.capture_screen_image(save_path)
