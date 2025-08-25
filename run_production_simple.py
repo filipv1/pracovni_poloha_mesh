@@ -106,14 +106,18 @@ class PreciseMediaPipeConverter:
         # Extract 3D coordinates (MediaPipe world coordinates are in meters)
         mp_points = np.array([[lm.x, lm.y, lm.z] for lm in mp_landmarks.landmark])
         
+        # Extract visibility scores
+        visibility = np.array([lm.visibility if hasattr(lm, 'visibility') else 1.0 
+                              for lm in mp_landmarks.landmark])
+        
         # Initialize SMPL-X joints and confidence weights
         num_joints = len(self.smplx_joint_tree)
         smplx_joints = np.zeros((num_joints, 3))
         joint_weights = np.zeros(num_joints)
         
-        # Direct landmark mappings with confidence
+        # Direct landmark mappings with confidence (excluding head - will be improved)
         direct_mappings = {
-            15: (0, 0.6),    # head from nose
+            # 15: (0, 0.6),    # head from nose - REMOVED, using improved estimation
             16: (11, 1.0),   # left_shoulder
             17: (12, 1.0),   # right_shoulder
             18: (13, 0.8),   # left_elbow
@@ -135,11 +139,11 @@ class PreciseMediaPipeConverter:
                 joint_weights[joint_idx] = confidence
         
         # Calculate derived joints with anatomical constraints
-        self._calculate_anatomical_joints(mp_points, smplx_joints, joint_weights)
+        self._calculate_anatomical_joints(mp_points, visibility, smplx_joints, joint_weights)
         
         return smplx_joints, joint_weights
     
-    def _calculate_anatomical_joints(self, mp_points, smplx_joints, joint_weights):
+    def _calculate_anatomical_joints(self, mp_points, visibility, smplx_joints, joint_weights):
         """Calculate anatomically consistent joint positions"""
         
         # Pelvis as center of hips
@@ -161,9 +165,12 @@ class PreciseMediaPipeConverter:
             smplx_joints[3] = pelvis + spine_unit * spine_length * 0.2   # spine1
             smplx_joints[6] = pelvis + spine_unit * spine_length * 0.5   # spine2  
             smplx_joints[9] = pelvis + spine_unit * spine_length * 0.8   # spine3
-            smplx_joints[12] = pelvis + spine_unit * spine_length * 0.95 # neck
+            # Note: neck will be improved below
             
-            joint_weights[3:13] = 0.7  # spine chain confidence
+            joint_weights[3:10] = 0.7  # spine chain confidence (not neck)
+        
+        # IMPROVED HEAD AND NECK ESTIMATION
+        self._calculate_improved_head_neck(mp_points, visibility, smplx_joints, joint_weights)
         
         # Feet positions (anatomically below ankles)
         foot_offset = np.array([0, 0, -0.08])  # 8cm below ankle
@@ -185,6 +192,105 @@ class PreciseMediaPipeConverter:
                 collar_vector = smplx_joints[17] - neck
                 smplx_joints[14] = neck + collar_vector * 0.4  # right_collar
                 joint_weights[14] = 0.6
+    
+    def _calculate_improved_head_neck(self, mp_points, visibility, smplx_joints, joint_weights):
+        """Calculate improved head and neck positions using ear landmarks"""
+        
+        # Check if we have necessary landmarks
+        if len(mp_points) < 13:
+            # Fallback to nose-based estimation
+            if len(mp_points) > 0:
+                smplx_joints[15] = mp_points[0]  # head from nose
+                joint_weights[15] = 0.6
+                # Simple neck estimation
+                if joint_weights[16] > 0 and joint_weights[17] > 0:
+                    shoulder_center = (smplx_joints[16] + smplx_joints[17]) / 2
+                    smplx_joints[12] = shoulder_center + (mp_points[0] - shoulder_center) * 0.3
+                    joint_weights[12] = 0.7
+            return
+        
+        # Extract key landmarks
+        nose = mp_points[0]
+        
+        # Check ear availability (indices 7 and 8)
+        has_left_ear = len(mp_points) > 7 and visibility[7] > 0.3
+        has_right_ear = len(mp_points) > 8 and visibility[8] > 0.3
+        
+        if not has_left_ear and not has_right_ear:
+            # No ears visible - fallback to nose with lower confidence
+            smplx_joints[15] = nose
+            joint_weights[15] = 0.5
+            # Simple neck
+            if joint_weights[16] > 0 and joint_weights[17] > 0:
+                shoulder_center = (smplx_joints[16] + smplx_joints[17]) / 2
+                smplx_joints[12] = shoulder_center + (nose - shoulder_center) * 0.3
+                joint_weights[12] = 0.7
+            return
+        
+        # Get ear positions
+        if has_left_ear and has_right_ear:
+            # Both ears visible - best case
+            left_ear = mp_points[7]
+            right_ear = mp_points[8]
+            ear_center = (left_ear + right_ear) / 2
+            ear_confidence = (visibility[7] + visibility[8]) / 2
+        elif has_left_ear:
+            # Only left ear visible - mirror it
+            left_ear = mp_points[7]
+            ear_to_nose = nose - left_ear
+            right_ear = nose + np.array([-ear_to_nose[0], ear_to_nose[1], ear_to_nose[2]])
+            ear_center = (left_ear + right_ear) / 2
+            ear_confidence = visibility[7] * 0.7
+        else:
+            # Only right ear visible - mirror it
+            right_ear = mp_points[8]
+            ear_to_nose = nose - right_ear
+            left_ear = nose + np.array([-ear_to_nose[0], ear_to_nose[1], ear_to_nose[2]])
+            ear_center = (left_ear + right_ear) / 2
+            ear_confidence = visibility[8] * 0.7
+        
+        # Calculate head orientation
+        forward_vector = nose - ear_center
+        forward_dist = np.linalg.norm(forward_vector)
+        
+        if forward_dist > 0:
+            forward_unit = forward_vector / forward_dist
+        else:
+            forward_unit = np.array([0, 0, 1])
+        
+        # Calculate up vector
+        ear_vector = right_ear - left_ear
+        ear_dist = np.linalg.norm(ear_vector)
+        
+        if ear_dist > 0:
+            up_vector = np.cross(ear_vector, forward_vector)
+            up_norm = np.linalg.norm(up_vector)
+            if up_norm > 0:
+                up_vector = up_vector / up_norm
+            else:
+                up_vector = np.array([0, 1, 0])
+        else:
+            up_vector = np.array([0, 1, 0])
+        
+        # Anthropometric ratios
+        skull_height_ratio = 1.3  # skull height = 1.3 * nose-ear distance
+        
+        # Estimate skull top
+        skull_top = ear_center + up_vector * (forward_dist * skull_height_ratio)
+        
+        # SMPL-X head joint (center of mass)
+        head_center = skull_top + forward_unit * (forward_dist * 0.2)
+        
+        # Set improved head position
+        smplx_joints[15] = head_center
+        joint_weights[15] = min(visibility[0], ear_confidence) * 0.85
+        
+        # Improve neck position
+        if joint_weights[16] > 0 and joint_weights[17] > 0:
+            shoulder_center = (smplx_joints[16] + smplx_joints[17]) / 2
+            improved_neck = shoulder_center + (ear_center - shoulder_center) * 0.3
+            smplx_joints[12] = improved_neck
+            joint_weights[12] = 0.85
 
 
 class HighAccuracySMPLXFitter:
