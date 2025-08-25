@@ -355,6 +355,11 @@ class HighAccuracySMPLXFitter:
             faces = self.smplx_model.faces
             joints = final_output.joints[0].cpu().numpy()
             
+            # Fix orientation - SMPL-X Y-axis points down by default
+            # Flip Y-axis to make mesh stand upright
+            vertices[:, 1] *= -1
+            joints[:, 1] *= -1
+            
             mesh_result = {
                 'vertices': vertices,
                 'faces': faces,
