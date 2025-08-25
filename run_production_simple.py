@@ -899,7 +899,7 @@ def main():
     video_path = None
     output_dir = "production_output"
     max_frames = None
-    frame_skip = 2
+    frame_skip = 1
     quality = 'ultra'
     
     # Simple argument parsing
