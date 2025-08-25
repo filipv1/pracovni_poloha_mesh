@@ -187,13 +187,13 @@ class VideoGeneratorFromPKL:
         vertices = mesh_data['vertices']
         faces = mesh_data['faces']
         
-        # Rotate mesh to face camera
-        vertices_rotated = vertices.copy()
-        vertices_rotated[:, [1, 2]] = vertices_rotated[:, [2, 1]]  # Swap Y and Z for 3D view
-        vertices_rotated[:, 0] *= -1  # Flip X to face camera
+        # Use natural orientation from SMPL-X (no forced rotation)
+        # Just swap Y and Z for matplotlib 3D (Y is up in SMPL-X, Z is up in matplotlib)
+        vertices_natural = vertices.copy()
+        vertices_natural[:, [1, 2]] = vertices_natural[:, [2, 1]]  # Swap Y and Z for 3D view
         
         # Center and scale vertices
-        vertices_centered = vertices_rotated - vertices_rotated.mean(axis=0)
+        vertices_centered = vertices_natural - vertices_natural.mean(axis=0)
         scale = 2.0 / (vertices_centered.max() - vertices_centered.min())
         vertices_scaled = vertices_centered * scale
         
@@ -216,20 +216,19 @@ class VideoGeneratorFromPKL:
         # Also plot joints if available
         if 'joints' in mesh_data:
             joints = mesh_data['joints']
-            # Apply same rotation to joints
-            joints_rotated = joints.copy()
-            joints_rotated[:, [1, 2]] = joints_rotated[:, [2, 1]]
-            joints_rotated[:, 0] *= -1
-            joints_centered = joints_rotated - joints_rotated.mean(axis=0)
+            # Apply same transformation as vertices (no forced rotation)
+            joints_natural = joints.copy()
+            joints_natural[:, [1, 2]] = joints_natural[:, [2, 1]]
+            joints_centered = joints_natural - joints_natural.mean(axis=0)
             joints_scaled = joints_centered * scale
             ax.scatter(joints_scaled[:, 0], joints_scaled[:, 1], joints_scaled[:, 2],
                       c='red', s=20, alpha=0.9)
         
-        # Set view - front view
+        # Set view - slightly angled to see 3D shape better
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])
         ax.set_zlim([-1, 1])
-        ax.view_init(elev=0, azim=0)  # Front view
+        ax.view_init(elev=10, azim=45)  # Slight angle to see orientation
         
         # Remove axes
         ax.set_xticks([])
@@ -265,12 +264,10 @@ class VideoGeneratorFromPKL:
         vertices = mesh_data['vertices']
         faces = mesh_data['faces']
         
-        # Transform for overlay view
+        # Use natural orientation (no forced rotation)
         vertices_transformed = vertices.copy()
-        # Swap Y and Z for proper 3D view
+        # Swap Y and Z for matplotlib 3D
         vertices_transformed[:, [1, 2]] = vertices_transformed[:, [2, 1]]
-        # Flip X to face camera
-        vertices_transformed[:, 0] *= -1
         
         # Center the mesh
         vertices_transformed = vertices_transformed - vertices_transformed.mean(axis=0)
