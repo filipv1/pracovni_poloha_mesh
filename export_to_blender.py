@@ -117,4 +117,4 @@ if __name__ == "__main__":
     return output_dir
 
 if __name__ == "__main__":
-    export_mesh_sequence_to_obj("frames2.pkl", "blender_export_2")
+    export_mesh_sequence_to_obj("arm_meshes.pkl", "arm_meshes_exp")

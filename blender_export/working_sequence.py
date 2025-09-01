@@ -10,7 +10,7 @@ def import_working_sequence():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
     
-    base_dir = Path(r"C:\Users\vaclavik\test9\pracovni_poloha_mesh\blender_export_2")
+    base_dir = Path(r"C:\Users\vaclavik\test9\pracovni_poloha_mesh\arm_meshes_exp")
     obj_files = sorted(base_dir.glob("frame_*.obj"))
     
     print(f"Found {len(obj_files)} OBJ files")
