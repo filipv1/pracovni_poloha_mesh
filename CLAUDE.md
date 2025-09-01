@@ -31,6 +31,13 @@ python validate_complete_pipeline.py
 python test_pipeline_init.py
 python test_fitting_only.py
 python test_render_only.py
+
+# 3D Arm Angle Analysis
+python export_arm_analysis_with_angles.py
+
+# Debug arm angle calculations
+python debug_arm_sides.py
+python test_arm_angles.py
 ```
 
 ### RunPod Deployment
@@ -70,6 +77,18 @@ This repository contains two main systems:
 - `TrunkAngleCalculator` - Angle computation and analysis
 - `SkeletonVisualizer` - Video overlay visualization
 
+### 3. 3D Arm Angle Analysis System (NEW)
+- **Entry Point**: `export_arm_analysis_with_angles.py`
+- **Technology**: SMPL-X joint data + anatomical coordinate systems + 3D vector math
+- **Purpose**: Calculate bilateral arm angles relative to trunk orientation with high precision
+- **Output**: Enhanced OBJ sequences with angle data, comprehensive statistics, Blender-ready visualization
+
+**Key Components:**
+- `arm_angle_calculator.py` - Robust anatomical angle calculation engine
+- `export_arm_analysis_with_angles.py` - Enhanced export with trunk+arm vector combinations
+- `debug_arm_sides.py` - Joint assignment verification tool
+- `test_arm_angles.py` - Synthetic pose validation suite
+
 ## Dependencies
 
 ### Core Requirements
@@ -105,6 +124,11 @@ Input Video → MediaPipe (33 2D landmarks) → Angle Calculation → Visualizat
 ### 3D Trunk Angle Analysis
 ```
 PKL Mesh Data → Joint Extraction → Trunk Vector Calculation → Angle Analysis → Statistics Export
+```
+
+### 3D Arm Angle Analysis (NEW)
+```
+PKL Mesh Data → Joint Extraction → Anatomical Coordinate System → Arm-to-Trunk Angle Calculation → Enhanced Visualization Export
 ```
 
 ## Performance Characteristics
@@ -154,14 +178,34 @@ angles_data = calculator.calculate_angles_from_pkl('meshes.pkl')
 calculator.export_statistics('trunk_angle_statistics.txt')
 ```
 
+### 3D Arm Angle Analysis (NEW)
+```python
+from arm_angle_calculator import calculate_bilateral_arm_angles
+from export_arm_analysis_with_angles import create_enhanced_arm_analysis_export
+
+# Calculate arm angles for single frame
+result = calculate_bilateral_arm_angles(joints_3d)
+left_angle = result['left_arm']['sagittal_angle']  # 0°=hanging, +90°=forward, -90°=backward
+right_angle = result['right_arm']['sagittal_angle']
+
+# Export complete enhanced analysis
+create_enhanced_arm_analysis_export('arm_meshes.pkl', 'enhanced_arm_analysis_export')
+```
+
 ### Export and Analysis Tools
 ```bash
 # Calculate trunk angles from existing mesh data
 python trunk_angle_calculator.py
 
-# Export to Blender with visualization
+# Calculate bilateral arm angles with trunk reference
+python export_arm_analysis_with_angles.py
+
+# Export to Blender with enhanced visualization
 python export_trunk_vectors_with_angle_to_blender.py
 python export_to_blender.py
+
+# Blender import for enhanced arm+trunk visualization
+# Load: blender_export/side_by_side_arm_and_trunk_sequence.py
 
 # Interactive 3D visualization
 python interactive_3d_viewer.py
