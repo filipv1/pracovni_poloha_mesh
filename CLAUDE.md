@@ -94,12 +94,17 @@ Download from SMPL-X official site and place in `models/smplx/`:
 
 ### 3D Mesh Generation
 ```
-Input Video → MediaPipe (33 3D landmarks) → SMPL-X Fitting → Open3D Rendering → Output
+Input Video → MediaPipe (33 3D landmarks) → SMPL-X Fitting → Open3D Rendering → Export (PKL/OBJ)
 ```
 
 ### Trunk Analysis (2D)
 ```
 Input Video → MediaPipe (33 2D landmarks) → Angle Calculation → Visualization → Output
+```
+
+### 3D Trunk Angle Analysis
+```
+PKL Mesh Data → Joint Extraction → Trunk Vector Calculation → Angle Analysis → Statistics Export
 ```
 
 ## Performance Characteristics
@@ -128,7 +133,7 @@ results = pipeline.execute_full_pipeline(
 )
 ```
 
-### Trunk Analysis Usage
+### Trunk Analysis Usage (2D Pipeline)
 ```python
 from pracovni_poloha2.main import parse_arguments
 from pracovni_poloha2.src.trunk_analyzer import TrunkAnalysisProcessor
@@ -140,6 +145,44 @@ processor = TrunkAnalysisProcessor(
 )
 ```
 
+### Trunk Angle Analysis (3D Pipeline)
+```python
+from trunk_angle_calculator import TrunkAngleCalculator
+
+calculator = TrunkAngleCalculator()
+angles_data = calculator.calculate_angles_from_pkl('meshes.pkl')
+calculator.export_statistics('trunk_angle_statistics.txt')
+```
+
+### Export and Analysis Tools
+```bash
+# Calculate trunk angles from existing mesh data
+python trunk_angle_calculator.py
+
+# Export to Blender with visualization
+python export_trunk_vectors_with_angle_to_blender.py
+python export_to_blender.py
+
+# Interactive 3D visualization
+python interactive_3d_viewer.py
+
+# Analyze frame skip performance
+python analyze_frame_skip.py
+```
+
+### Data Export Capabilities
+The pipeline supports multiple export formats:
+- **PKL files**: Complete mesh sequence data (`*_meshes.pkl`)
+- **OBJ sequences**: Individual frame meshes (`trunk_analysis_export/trunk_analysis_XXXX.obj`)
+- **Blender integration**: Direct export to Blender format with animation
+- **CSV data**: Angle measurements and statistics
+- **Visualization**: Professional 3D renders and animations
+
+### Blender Integration Workflow
+```
+PKL Mesh Data → Trunk Vector Analysis → Blender Export → Professional Animation
+```
+
 ## Important Notes
 
 - Always use `conda activate trunk_analysis` before running any scripts
@@ -147,3 +190,5 @@ processor = TrunkAnalysisProcessor(
 - For GPU processing, ensure CUDA 11.8+ compatibility
 - Use RunPod RTX 4090 for optimal 3D pipeline performance
 - The repository includes extensive documentation in multiple `.md` files for specific use cases
+- Large OBJ export sequences (400+ files) are generated in `trunk_analysis_export/` directory
+- Trunk angle statistics are saved as `trunk_angle_statistics.txt`
