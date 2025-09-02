@@ -1,0 +1,23 @@
+{
+  "algorithm": "neck_like_arm_calculator",
+  "total_frames": 499,
+  "duration_sec": 16.6,
+  "neck_angle_stats": {
+    "mean": -11.070181846618652,
+    "std": 15.428543090820312,
+    "min": -34.77181625366211,
+    "max": 55.273475646972656,
+    "median": -14.318022727966309
+  },
+  "confidence_stats": {
+    "mean": 1.0,
+    "min": 1.0,
+    "max": 1.0
+  },
+  "movement_classification": {
+    "flexion_frames": 15,
+    "extension_frames": 242,
+    "neutral_frames": 242
+  },
+  "error_frames": 0
+}
