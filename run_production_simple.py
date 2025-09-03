@@ -331,6 +331,7 @@ class HighAccuracySMPLXFitter:
         self.param_history = []
         self.max_history = 5
         self.temporal_alpha = 0.3  # Keep for individual processing compatibility
+        self.max_recommended_batch_size = 128  # Add missing attribute
         
         # DISABLE complex predictions - keep it simple like arm_meshes.pkl
         self.limb_predictor = None
