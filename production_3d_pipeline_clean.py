@@ -915,6 +915,10 @@ def parse_args():
                        default='ultra', help='Processing quality')
     parser.add_argument('--output-dir', default=None,
                        help='Output directory for results')
+    parser.add_argument('--max-frames', type=int, default=None,
+                       help='Maximum number of frames to process (default: all)')
+    parser.add_argument('--frame-skip', type=int, default=1,
+                       help='Process every Nth frame (default: 1 = every frame)')
     return parser.parse_args()
 
 
@@ -987,8 +991,8 @@ def main():
         results = pipeline.execute_full_pipeline(
             test_video,
             output_dir=output_dir,
-            max_frames=150,  # ~5 seconds at 30fps
-            frame_skip=2,    # Process every 2nd frame
+            max_frames=args.max_frames,
+            frame_skip=args.frame_skip,
             quality=args.quality
         )
         
