@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+.#!/usr/bin/env python3
 """
 Combined Angles CSV Creator
 Creates single CSV with: frame, trunk_angle, neck_angle, left_arm_angle, right_arm_angle
@@ -132,7 +132,7 @@ def main():
     """Main execution function"""
     
     # Default PKL file
-    pkl_file = "fil_vid_meshes.pkl"
+    pkl_file = "arm_meshes.pkl"
     
     if not Path(pkl_file).exists():
         print(f"ERROR: PKL file not found: {pkl_file}")

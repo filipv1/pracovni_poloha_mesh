@@ -620,11 +620,30 @@ class HighAccuracySMPLXFitter:
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
                 joint_loss = torch.mean(joint_diff ** 2)
                 
-                # Regularization terms
-                pose_reg = torch.mean(body_pose ** 2) * 0.001
-                shape_reg = torch.mean(betas ** 2) * 0.0001
+                # Regularization terms (reduced to match individual processing)
+                pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
+                shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
                 
-                total_loss = joint_loss + pose_reg + shape_reg
+                # Temporal consistency for batch processing
+                temporal_loss = 0.0
+                
+                # 1. Consistency with previous batch (first frame of current batch)
+                if len(self.param_history) > 0:
+                    prev_params = self.param_history[-1]
+                    temporal_loss += (
+                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
+                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
+                    )
+                
+                # 2. Internal batch consistency (between consecutive frames within batch)
+                if batch_size > 1:
+                    for b in range(1, batch_size):
+                        temporal_loss += (
+                            torch.mean((body_pose[b:b+1] - body_pose[b-1:b]) ** 2) * self.temporal_alpha * 0.5 +
+                            torch.mean((betas[b:b+1] - betas[b-1:b]) ** 2) * self.temporal_alpha * 0.05
+                        )
+                
+                total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
                 total_loss.backward()
                 optimizer.step()
