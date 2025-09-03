@@ -636,23 +636,29 @@ class HighAccuracySMPLXFitter:
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
                 shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
                 
-                # LIGHT TEMPORAL SMOOTHING - Exact arm_meshes.pkl style
-                # arm_meshes.pkl used individual processing WITH temporal smoothing
+                # FULL TEMPORAL SMOOTHING - True arm_meshes.pkl emulation
+                # arm_meshes.pkl: every frame smoothed with previous frame
                 temporal_loss = 0.0
                 
-                # Restore arm_meshes.pkl temporal smoothing (individual processing style)
+                # 1. Inter-batch smoothing (frame 0 with previous batch)
                 if len(self.param_history) > 0:
                     prev_params = self.param_history[-1]
-                    
-                    # Apply temporal smoothing only to first frame of batch (inter-batch consistency)
-                    # This emulates individual processing where each frame is smoothed with previous
-                    temporal_loss = (
+                    temporal_loss += (
                         torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
                         torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
                     )
-                    
-                    # For other frames in batch, no temporal smoothing (independent processing)
-                    # This matches arm_meshes.pkl where each frame was processed individually
+                
+                # 2. Intra-batch smoothing (every frame with previous frame in batch)
+                # This is KEY - arm_meshes.pkl had smoothing between ALL adjacent frames
+                if batch_size > 1:
+                    for i in range(1, batch_size):
+                        frame_to_frame_loss = (
+                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * self.temporal_alpha +
+                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * self.temporal_alpha * 0.1
+                        )
+                        temporal_loss += frame_to_frame_loss
+                
+                # NOW every frame has temporal smoothing exactly like arm_meshes.pkl individual processing
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
