@@ -707,171 +707,7 @@ class ProfessionalVisualizer:
         
         print(f"OK Visualizer: {'Open3D' if self.use_open3d else 'Matplotlib'} renderer")
     
-    def render_single_mesh(self, mesh_data, title="3D Human Mesh", save_path=None, show_joints=True):
-        """Render single mesh with professional quality"""
-        
-        if mesh_data is None:
-            print("No mesh data to render")
-            return None
-        
-        if self.use_open3d and not mesh_data.get('is_wireframe', False):
-            return self._render_with_open3d(mesh_data, title, save_path, show_joints)
-        else:
-            return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
-    
-    def _render_with_open3d(self, mesh_data, title, save_path, show_joints):
-        """High-quality Open3D rendering"""
-        vertices = mesh_data['vertices']
-        faces = mesh_data.get('faces', [])
-        joints = mesh_data.get('joints', vertices[:22] if len(vertices) > 22 else vertices)
-        
-        # Create main mesh
-        mesh = o3d.geometry.TriangleMesh()
-        mesh.vertices = o3d.utility.Vector3dVector(vertices)
-        
-        geometries = []
-        
-        if len(faces) > 0:
-            mesh.triangles = o3d.utility.Vector3iVector(faces)
-            mesh.compute_vertex_normals()
-            mesh.paint_uniform_color(self.mesh_color)
-            geometries.append(mesh)
-        
-        # Add joints if requested
-        if show_joints and len(joints) > 0:
-            joint_cloud = o3d.geometry.PointCloud()
-            joint_cloud.points = o3d.utility.Vector3dVector(joints)
-            joint_cloud.paint_uniform_color(self.joint_color)
-            
-            # Make joints larger
-            joint_spheres = []
-            for point in joints:
-                sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
-                sphere.translate(point)
-                sphere.paint_uniform_color(self.joint_color)
-                joint_spheres.append(sphere)
-            geometries.extend(joint_spheres)
-        
-        # Add coordinate frame
-        coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
-        geometries.append(coord_frame)
-        
-        if save_path:
-            # Save high-quality screenshot
-            vis = o3d.visualization.Visualizer()
-            vis.create_window(window_name=title, width=1920, height=1080)
-            
-            for geom in geometries:
-                vis.add_geometry(geom)
-            
-            # Set optimal viewpoint
-            ctr = vis.get_view_control()
-            ctr.set_zoom(0.8)
-            ctr.set_front([0.0, 0.0, 1.0])
-            ctr.set_lookat([0.0, 0.0, 0.0])
-            ctr.set_up([0.0, 1.0, 0.0])
-            
-            vis.poll_events()
-            vis.update_renderer()
-            vis.capture_screen_image(save_path)
-            vis.destroy_window()
-            
-            print(f"OK High-quality render saved: {save_path}")
-            return save_path
-        else:
-            # Interactive visualization
-            o3d.visualization.draw_geometries(
-                geometries,
-                window_name=title,
-                width=1200,
-                height=900
-            )
-            return None
-    
-    def _render_with_matplotlib(self, mesh_data, title, save_path, show_joints):
-        """Professional matplotlib rendering"""
-        fig = plt.figure(figsize=(16, 12), facecolor=self.bg_color)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        vertices = mesh_data['vertices']
-        faces = mesh_data.get('faces', [])
-        connections = mesh_data.get('connections', [])
-        joints = mesh_data.get('joints', vertices)
-        
-        # Plot mesh as dense point cloud (RunPod safe)
-        if len(vertices) > 0:
-            print(f"RUNPOD SAFE: Rendering {len(vertices)} mesh vertices as dense point cloud")
-            ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2],
-                      c=self.mesh_color, s=3, alpha=0.9, depthshade=True)
-        
-        # Plot mesh faces (advanced rendering - may fail on some systems)
-        if len(faces) > 0 and False:  # Disabled for RunPod safety
-            from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-            
-            try:
-                faces_np = np.array(faces)
-                if len(vertices) > 0 and len(faces_np) > 0:
-                    mesh_faces = vertices[faces_np]
-                    valid_faces = []
-                    for face in mesh_faces:
-                        if len(face) == 3 and not np.any(np.isnan(face)) and not np.any(np.isinf(face)):
-                            valid_faces.append(face)
-                    
-                    if valid_faces:
-                        collection = Poly3DCollection(valid_faces, alpha=0.7, facecolor=self.mesh_color,
-                                                    edgecolor='black', linewidth=0.1)
-                        ax.add_collection3d(collection)
-                        print(f"OK Rendered {len(valid_faces)} mesh faces")
-                        
-            except Exception as e:
-                print(f"WARNING: Mesh face rendering failed: {e}")
-        
-        # Plot skeleton connections
-        if len(connections) > 0:
-            for start_idx, end_idx in connections:
-                if start_idx < len(vertices) and end_idx < len(vertices):
-                    start, end = vertices[start_idx], vertices[end_idx]
-                    ax.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]],
-                           color=self.skeleton_color, linewidth=4, alpha=0.8)
-        
-        # Plot joints
-        if show_joints and len(joints) > 0:
-            ax.scatter(joints[:, 0], joints[:, 1], joints[:, 2],
-                      c=[self.joint_color], s=100, alpha=0.9, depthshade=True)
-        
-        # Professional styling
-        ax.set_title(title, fontsize=20, color='white', pad=30)
-        ax.set_xlabel('X (meters)', fontsize=14, color='white')
-        ax.set_ylabel('Y (meters)', fontsize=14, color='white')
-        ax.set_zlabel('Z (meters)', fontsize=14, color='white')
-        
-        # Set equal aspect ratio
-        all_points = np.vstack([vertices, joints]) if len(joints) > 0 else vertices
-        center = np.mean(all_points, axis=0)
-        ranges = np.ptp(all_points, axis=0)
-        max_range = np.max(ranges) * 0.6
-        
-        ax.set_xlim(center[0] - max_range, center[0] + max_range)
-        ax.set_ylim(center[1] - max_range, center[1] + max_range)
-        ax.set_zlim(center[2] - max_range, center[2] + max_range)
-        
-        # Optimize viewing angle
-        ax.view_init(elev=15, azim=45)
-        
-        # Grid and styling
-        ax.grid(True, alpha=0.3)
-        ax.xaxis.pane.fill = False
-        ax.yaxis.pane.fill = False
-        ax.zaxis.pane.fill = False
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight',
-                       facecolor=self.bg_color, edgecolor='none')
-            print(f"OK Professional render saved: {save_path}")
-            plt.close(fig)
-            return save_path
-        
-        return fig, ax
+    # PNG rendering methods removed for performance - only video generation remains
     
     def create_professional_video(self, mesh_sequence, output_path, fps=30, quality='ultra'):
         """Create professional-quality video from mesh sequence"""
@@ -1178,11 +1014,7 @@ class MasterPipeline:
                                 if 'fitting_error' in mesh_data:
                                     self.stats['average_fitting_error'] += mesh_data['fitting_error']
                                     
-                                # Save PNG visualization
-                                frame_idx = batch_frame_indices[i]
-                                frame_path = output_dir / f"frame_{frame_idx:04d}_mesh.png"
-                                self.visualizer.render_single_mesh(mesh_data, f"Frame {frame_idx} Mesh",
-                                                                 str(frame_path), show_joints=True)
+                                # PNG generation removed for performance
                             else:
                                 mesh_results.append(None)
                         else:
@@ -1228,11 +1060,7 @@ class MasterPipeline:
                 json.dump(self.stats, f, indent=2)
             print(f"OK Statistics: {stats_file}")
             
-            # Create final high-quality visualization
-            final_mesh_img = output_dir / f"{video_path.stem}_final_mesh.png"
-            self.visualizer.render_single_mesh(mesh_sequence[-1], "Final 3D Human Mesh", 
-                                             str(final_mesh_img), show_joints=True)
-            print(f"OK Final mesh: {final_mesh_img}")
+            # Final mesh PNG generation removed for performance
             
             # Create professional video
             output_video = output_dir / f"{video_path.stem}_3d_animation.mp4"
