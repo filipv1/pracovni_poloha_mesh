@@ -636,12 +636,23 @@ class HighAccuracySMPLXFitter:
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
                 shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
                 
-                # NO TEMPORAL SMOOTHING - Pure arm_meshes.pkl style
-                # Each frame is independent for natural movement
+                # LIGHT TEMPORAL SMOOTHING - Exact arm_meshes.pkl style
+                # arm_meshes.pkl used individual processing WITH temporal smoothing
                 temporal_loss = 0.0
                 
-                # DISABLED: All temporal smoothing to match arm_meshes.pkl quality
-                # Batch processing without temporal constraints = individual processing quality
+                # Restore arm_meshes.pkl temporal smoothing (individual processing style)
+                if len(self.param_history) > 0:
+                    prev_params = self.param_history[-1]
+                    
+                    # Apply temporal smoothing only to first frame of batch (inter-batch consistency)
+                    # This emulates individual processing where each frame is smoothed with previous
+                    temporal_loss = (
+                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
+                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
+                    )
+                    
+                    # For other frames in batch, no temporal smoothing (independent processing)
+                    # This matches arm_meshes.pkl where each frame was processed individually
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
