@@ -472,15 +472,20 @@ class ProfessionalVisualizer:
         geometries.append(coord_frame)
         
         if save_path:
+            # Check if running in headless environment (segfault fix for RunPod)
+            if os.environ.get('DISPLAY') == '' or '--headless' in sys.argv:
+                print(f"Headless mode: Skipping Open3D rendering, using matplotlib fallback")
+                return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
+            
             # Save high-quality screenshot (headless-compatible)
             try:
                 vis = o3d.visualization.Visualizer()
                 # Try to create window with headless fallback
                 try:
                     vis.create_window(window_name=title, width=1920, height=1080, visible=False)
-                except:
-                    # Fallback for headless environment
-                    vis.create_window(window_name=title, width=1920, height=1080)
+                except Exception as e:
+                    print(f"Open3D window creation failed: {e}, falling back to matplotlib")
+                    return self._render_with_matplotlib(mesh_data, title, save_path, show_joints)
                 
                 for geom in geometries:
                     vis.add_geometry(geom)
