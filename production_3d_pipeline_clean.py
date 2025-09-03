@@ -7,6 +7,7 @@ Designed for maximum accuracy and professional visualization
 
 import os
 import sys
+import argparse
 import numpy as np
 import cv2
 import torch
@@ -25,6 +26,10 @@ from matplotlib.animation import FuncAnimation
 import warnings
 warnings.filterwarnings('ignore')
 
+# Set environment for headless operation
+os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
+os.environ.pop('DISPLAY', None)  # Remove DISPLAY variable if present
+
 # Import libraries with proper error handling
 try:
     import smplx
@@ -35,9 +40,13 @@ except ImportError:
     print("SMPL-X: Not Available")
 
 try:
+    # Configure Open3D for headless mode
+    os.environ['OPEN3D_USE_HEADLESS_RENDERING'] = '1'
     import open3d as o3d
+    # Disable GUI for headless operation
+    o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
     OPEN3D_AVAILABLE = True
-    print("Open3D: Available (v{})".format(o3d.__version__))
+    print("Open3D: Available (v{}) - Headless Mode".format(o3d.__version__))
 except ImportError:
     OPEN3D_AVAILABLE = False
     print("Open3D: Not Available")
@@ -879,10 +888,32 @@ class MasterPipeline:
             return None
 
 
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='3D Human Mesh Pipeline')
+    parser.add_argument('input_video', nargs='?', default=None, 
+                       help='Input video file path')
+    parser.add_argument('--headless', action='store_true',
+                       help='Run in headless mode (for servers)')
+    parser.add_argument('--device', choices=['cpu', 'cuda'], default='auto',
+                       help='Device to use for processing')
+    parser.add_argument('--quality', choices=['low', 'medium', 'high', 'ultra'], 
+                       default='ultra', help='Processing quality')
+    parser.add_argument('--output-dir', default=None,
+                       help='Output directory for results')
+    return parser.parse_args()
+
+
 def main():
     """Main execution function"""
+    args = parse_args()
+    
     print("ROCKET PRODUCTION 3D HUMAN MESH PIPELINE")
     print("=" * 80)
+    
+    if args.headless:
+        print("HEADLESS MODE: GUI disabled for server operation")
+        os.environ['DISPLAY'] = ''
     
     # Verify SMPL-X models
     models_dir = Path("models/smplx")
@@ -894,50 +925,73 @@ def main():
     print("OK SMPL-X models found")
     
     # Initialize master pipeline
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if args.device == 'auto':
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    else:
+        device = args.device
+        
     pipeline = MasterPipeline(
         smplx_path="models/smplx",
         device=device,
         gender='neutral'
     )
     
-    # Find test video
-    test_videos = [
-        "test.mp4", "sample.mp4", "input.mp4", 
-        "video.mp4", "demo.mp4", "example.mp4"
-    ]
-    
-    test_video = None
-    for video in test_videos:
-        if Path(video).exists():
-            test_video = video
-            break
-    
-    if test_video:
-        print(f"\nMOVIE Found test video: {test_video}")
+    # Determine input video
+    if args.input_video:
+        # Use provided video file
+        if not Path(args.input_video).exists():
+            print(f"X ERROR: Video file '{args.input_video}' not found!")
+            return
+        test_video = args.input_video
+        print(f"\nMOVIE Processing: {test_video}")
+    else:
+        # Auto-detect test video
+        test_videos = [
+            "test.mp4", "sample.mp4", "input.mp4", 
+            "video.mp4", "demo.mp4", "example.mp4", "fil_vid.mp4"
+        ]
         
-        # Execute full pipeline
+        test_video = None
+        for video in test_videos:
+            if Path(video).exists():
+                test_video = video
+                break
+        
+        if not test_video:
+            print(f"\nX No video found!")
+            print(f"Usage: python production_3d_pipeline_clean.py <video_file> [--headless]")
+            print(f"Available test files: {', '.join(test_videos)}")
+            return
+            
+        print(f"\nMOVIE Auto-detected: {test_video}")
+    
+    # Set output directory
+    output_dir = args.output_dir or "final_production_output"
+    
+    # Execute full pipeline
+    try:
         results = pipeline.execute_full_pipeline(
             test_video,
-            output_dir="final_production_output",
+            output_dir=output_dir,
             max_frames=150,  # ~5 seconds at 30fps
             frame_skip=2,    # Process every 2nd frame
-            quality='ultra'  # Ultra-high quality output
+            quality=args.quality
         )
         
         if results:
-            print(f"\nTROPHY MISSION ACCOMPLISHED!")
+            print(f"\n✅ MISSION ACCOMPLISHED!")
             print(f"Check '{results['output_dir']}' for all results:")
-            print(f"  MOVIE 3D Animation: {results['video_file'].name}")
-            print(f"  CHART Mesh Data: {results['mesh_file'].name}")
-            print(f"  GRAPH Statistics: Generated {results['stats']['meshes_generated']} meshes")
+            print(f"  🎬 Animation: {results['video_file'].name}")
+            print(f"  📦 PKL File: {results['mesh_file'].name}")
+            print(f"  📊 Statistics: Generated {results['stats']['meshes_generated']} meshes")
         else:
-            print(f"\nBOOM MISSION FAILED!")
+            print(f"\n❌ MISSION FAILED!")
             
-    else:
-        print(f"\nFOLDER No test video found!")
-        print(f"Available test files: {', '.join(test_videos)}")
-        print(f"Place a video file in the current directory and run again.")
+    except Exception as e:
+        print(f"\n❌ ERROR: {str(e)}")
+        if not args.headless:
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
