@@ -518,6 +518,25 @@ class HighAccuracySMPLXFitter:
         batch_size = len(landmarks_batch)
         print(f"  Batch fitting {batch_size} frames...")
         
+        # Create temporary batch SMPL-X model for this batch
+        try:
+            batch_smplx_model = smplx.SMPLX(
+                model_path=str(self.model_path),
+                gender=self.gender,
+                use_face_contour=False,
+                use_hands=False,
+                num_betas=10,
+                num_expression_coeffs=0,
+                create_global_orient=True,
+                create_body_pose=True,
+                create_transl=True,
+                batch_size=batch_size  # Key fix: use actual batch_size
+            ).to(self.device)
+        except Exception as e:
+            print(f"  WARNING: Batch model creation failed ({e}), falling back to individual processing")
+            return [self.fit_mesh_to_landmarks(landmarks, weights) 
+                    for landmarks, weights in zip(landmarks_batch, weights_batch or [None] * len(landmarks_batch))]
+        
         # Prepare batch tensors
         batch_landmarks = []
         batch_weights = []
@@ -580,8 +599,8 @@ class HighAccuracySMPLXFitter:
             for i in range(stage['iterations']):
                 optimizer.zero_grad()
                 
-                # Forward pass - batch SMPL-X
-                smpl_output = self.smplx_model(
+                # Forward pass - batch SMPL-X with correct batch model
+                smpl_output = batch_smplx_model(
                     global_orient=global_orient,
                     body_pose=body_pose,
                     transl=transl,
@@ -615,11 +634,11 @@ class HighAccuracySMPLXFitter:
         # Generate individual mesh results  
         mesh_results = []
         with torch.no_grad():
-            final_output = self.smplx_model(**best_params)
+            final_output = batch_smplx_model(**best_params)
             
             for i in range(batch_size):
                 vertices = final_output.vertices[i].cpu().numpy()
-                faces = self.smplx_model.faces
+                faces = batch_smplx_model.faces
                 joints = final_output.joints[i].cpu().numpy()
                 
                 # Fix orientation (same as single version)
@@ -644,6 +663,10 @@ class HighAccuracySMPLXFitter:
             self.param_history.append(last_frame_params)
             if len(self.param_history) > self.max_history:
                 self.param_history.pop(0)
+        
+        # Clean up batch model
+        del batch_smplx_model
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
         
         print(f"  OK Batch fitted {batch_size} meshes, avg error={best_loss:.6f}")
         return mesh_results
