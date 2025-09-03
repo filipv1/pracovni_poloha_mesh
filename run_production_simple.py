@@ -327,11 +327,19 @@ class HighAccuracySMPLXFitter:
         
         self.converter = PreciseMediaPipeConverter()
         
-        # Advanced temporal smoothing
+        # Intelligent limb prediction (replaces global temporal smoothing)
         self.param_history = []
-        self.max_history = 5
-        self.temporal_alpha = 0.3
-        self.max_recommended_batch_size = 128  # Maximum for perfect smoothing
+        self.max_history = 3  # Reduced for natural movement
+        self.temporal_alpha = 0.05  # Much lighter temporal regularization
+        
+        # Initialize intelligent limb predictor
+        try:
+            from intelligent_limb_predictor import IntelligentLimbPredictor
+            self.limb_predictor = IntelligentLimbPredictor()
+            print("OK Intelligent Limb Predictor initialized")
+        except ImportError:
+            self.limb_predictor = None
+            print("INFO: Intelligent Limb Predictor not available - using basic processing")
         
         # Batch processing support
         self.supports_batch = True
@@ -633,40 +641,25 @@ class HighAccuracySMPLXFitter:
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
                 shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
                 
-                # ADVANCED HIERARCHICAL TEMPORAL SMOOTHING
-                # Provides perfect consistency even with batch_size=128
+                # MINIMAL TEMPORAL SMOOTHING - Natural movement priority
+                # Only prevent extreme unnatural jumps, keep natural human motion
                 temporal_loss = 0.0
                 
-                # 1. Inter-batch consistency (first frame with previous batch)
-                if len(self.param_history) > 0:
+                # DISABLED: Full temporal smoothing causes robotic movement
+                # Natural human movement has quick changes and "imperfections"
+                
+                # OPTIONAL: Only prevent extreme unnatural pose jumps (very light)
+                if batch_size > 1 and len(self.param_history) > 0:
+                    # Only smooth if there are extreme unnatural jumps (>threshold)
                     prev_params = self.param_history[-1]
-                    temporal_loss += (
-                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
-                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
-                    )
-                
-                # 2. Sequential consistency (every frame with previous frame)
-                if batch_size > 1:
-                    # Direct frame-to-frame consistency (like batch_size=1)
-                    sequential_pose_loss = torch.sum(
-                        torch.mean((body_pose[1:] - body_pose[:-1]) ** 2, dim=1)
-                    ) * self.temporal_alpha
-                    sequential_beta_loss = torch.sum(
-                        torch.mean((betas[1:] - betas[:-1]) ** 2, dim=1)
-                    ) * self.temporal_alpha * 0.1
                     
-                    temporal_loss += sequential_pose_loss + sequential_beta_loss
+                    # Check for extreme unnatural changes (threshold-based)
+                    pose_change = torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2)
+                    if pose_change > 0.1:  # Only smooth extreme jumps
+                        temporal_loss = pose_change * 0.01  # Very light smoothing
                 
-                # 3. Sliding window consistency (DISABLED - caused over-smoothing)
-                # Experimental: Additional smoothing levels caused quality regression
-                # Keep only essential Level 1 & 2 for optimal results
-                
-                # OPTIONAL: Light global smoothness only for batch >= 64
-                if batch_size >= 64:
-                    # Very light global variance penalty (reduced weight)
-                    batch_pose_range = torch.max(body_pose, dim=0)[0] - torch.min(body_pose, dim=0)[0]
-                    global_smoothness = torch.mean(batch_pose_range) * self.temporal_alpha * 0.02  # Much lower weight
-                    temporal_loss += global_smoothness
+                # Alternative: Confidence-based smoothing instead of temporal
+                # TODO: Implement intelligent limb prediction for low-confidence detections
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
@@ -976,8 +969,36 @@ class MasterPipeline:
             results = self.pose.process(rgb_frame)
             
             if results.pose_world_landmarks:
-                # Convert landmarks to SMPL-X format
-                joints, weights = converter.convert_landmarks_to_smplx(results.pose_world_landmarks)
+                # Extract raw landmarks and confidences
+                raw_landmarks = np.array([
+                    [lm.x, lm.y, lm.z] for lm in results.pose_world_landmarks.landmark
+                ])
+                confidences = np.array([
+                    lm.visibility for lm in results.pose_landmarks.landmark
+                ]) if results.pose_landmarks else np.ones(33) * 0.5
+                
+                # Apply intelligent limb prediction if available
+                if self.limb_predictor is not None:
+                    corrected_landmarks, correction_mask = self.limb_predictor.predict_missing_limbs(
+                        raw_landmarks, confidences
+                    )
+                    if np.any(correction_mask):
+                        print(f"Frame {frame_idx}: Predicted {np.sum(correction_mask)} joints")
+                else:
+                    corrected_landmarks = raw_landmarks
+                
+                # Convert corrected landmarks to SMPL-X format
+                # Create mock MediaPipe landmarks object for converter
+                class MockLandmark:
+                    def __init__(self, x, y, z):
+                        self.x, self.y, self.z = x, y, z
+                
+                class MockLandmarks:
+                    def __init__(self, landmarks):
+                        self.landmark = [MockLandmark(x, y, z) for x, y, z in landmarks]
+                
+                mock_landmarks = MockLandmarks(corrected_landmarks)
+                joints, weights = converter.convert_landmarks_to_smplx(mock_landmarks)
                 
                 if joints is not None:
                     landmarks_batch.append(joints)
