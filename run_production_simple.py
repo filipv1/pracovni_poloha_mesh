@@ -327,19 +327,14 @@ class HighAccuracySMPLXFitter:
         
         self.converter = PreciseMediaPipeConverter()
         
-        # Intelligent limb prediction (replaces global temporal smoothing)
+        # Simple processing - emulate arm_meshes.pkl quality with batch speed
         self.param_history = []
-        self.max_history = 3  # Reduced for natural movement
-        self.temporal_alpha = 0.05  # Much lighter temporal regularization
+        self.max_history = 5
+        self.temporal_alpha = 0.3  # Keep for individual processing compatibility
         
-        # Initialize intelligent limb predictor
-        try:
-            from intelligent_limb_predictor import IntelligentLimbPredictor
-            self.limb_predictor = IntelligentLimbPredictor()
-            print("OK Intelligent Limb Predictor initialized")
-        except ImportError:
-            self.limb_predictor = None
-            print("INFO: Intelligent Limb Predictor not available - using basic processing")
+        # DISABLE complex predictions - keep it simple like arm_meshes.pkl
+        self.limb_predictor = None
+        print("INFO: Using simple processing for natural movement (arm_meshes.pkl style)")
         
         # Batch processing support
         self.supports_batch = True
@@ -641,25 +636,12 @@ class HighAccuracySMPLXFitter:
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
                 shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
                 
-                # MINIMAL TEMPORAL SMOOTHING - Natural movement priority
-                # Only prevent extreme unnatural jumps, keep natural human motion
+                # NO TEMPORAL SMOOTHING - Pure arm_meshes.pkl style
+                # Each frame is independent for natural movement
                 temporal_loss = 0.0
                 
-                # DISABLED: Full temporal smoothing causes robotic movement
-                # Natural human movement has quick changes and "imperfections"
-                
-                # OPTIONAL: Only prevent extreme unnatural pose jumps (very light)
-                if batch_size > 1 and len(self.param_history) > 0:
-                    # Only smooth if there are extreme unnatural jumps (>threshold)
-                    prev_params = self.param_history[-1]
-                    
-                    # Check for extreme unnatural changes (threshold-based)
-                    pose_change = torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2)
-                    if pose_change > 0.1:  # Only smooth extreme jumps
-                        temporal_loss = pose_change * 0.01  # Very light smoothing
-                
-                # Alternative: Confidence-based smoothing instead of temporal
-                # TODO: Implement intelligent limb prediction for low-confidence detections
+                # DISABLED: All temporal smoothing to match arm_meshes.pkl quality
+                # Batch processing without temporal constraints = individual processing quality
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
@@ -969,36 +951,8 @@ class MasterPipeline:
             results = self.pose.process(rgb_frame)
             
             if results.pose_world_landmarks:
-                # Extract raw landmarks and confidences
-                raw_landmarks = np.array([
-                    [lm.x, lm.y, lm.z] for lm in results.pose_world_landmarks.landmark
-                ])
-                confidences = np.array([
-                    lm.visibility for lm in results.pose_landmarks.landmark
-                ]) if results.pose_landmarks else np.ones(33) * 0.5
-                
-                # Apply intelligent limb prediction if available
-                if self.limb_predictor is not None:
-                    corrected_landmarks, correction_mask = self.limb_predictor.predict_missing_limbs(
-                        raw_landmarks, confidences
-                    )
-                    if np.any(correction_mask):
-                        print(f"Frame {frame_idx}: Predicted {np.sum(correction_mask)} joints")
-                else:
-                    corrected_landmarks = raw_landmarks
-                
-                # Convert corrected landmarks to SMPL-X format
-                # Create mock MediaPipe landmarks object for converter
-                class MockLandmark:
-                    def __init__(self, x, y, z):
-                        self.x, self.y, self.z = x, y, z
-                
-                class MockLandmarks:
-                    def __init__(self, landmarks):
-                        self.landmark = [MockLandmark(x, y, z) for x, y, z in landmarks]
-                
-                mock_landmarks = MockLandmarks(corrected_landmarks)
-                joints, weights = converter.convert_landmarks_to_smplx(mock_landmarks)
+                # Simple processing like arm_meshes.pkl - no complex predictions
+                joints, weights = converter.convert_landmarks_to_smplx(results.pose_world_landmarks)
                 
                 if joints is not None:
                     landmarks_batch.append(joints)
