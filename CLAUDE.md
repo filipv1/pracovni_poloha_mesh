@@ -38,6 +38,16 @@ python export_arm_analysis_with_angles.py
 # Debug arm angle calculations
 python debug_arm_sides.py
 python test_arm_angles.py
+
+# Debug and validate data
+python show_pkl_data.py
+python explore_joints.py
+```
+
+### Linting and Quality Checks
+```bash
+# No specific lint commands found - add as needed for code quality
+# Consider adding: ruff check, black, mypy when implementing
 ```
 
 ### RunPod Deployment
@@ -88,6 +98,19 @@ This repository contains two main systems:
 - `export_arm_analysis_with_angles.py` - Enhanced export with trunk+arm vector combinations
 - `debug_arm_sides.py` - Joint assignment verification tool
 - `test_arm_angles.py` - Synthetic pose validation suite
+- `neck_angle_calculator_like_arm.py` - Stable neck angle calculator using arm calculator logic
+
+### 4. Data Analysis and Visualization Tools
+- **Entry Points**: Multiple analysis and export scripts
+- **Technology**: NumPy + Matplotlib + Blender integration + CSV export
+- **Purpose**: Extract insights from processed mesh data and create visualizations
+- **Output**: Statistics, interactive viewers, Blender animations, CSV reports
+
+**Key Components:**
+- `trunk_angle_calculator.py` - Extract trunk bending statistics from mesh data
+- `create_combined_angles_csv.py` - Combine multiple angle data sources into unified CSV
+- `interactive_3d_viewer.py` - Real-time 3D mesh visualization
+- `analyze_frame_skip.py` - Performance analysis for optimization
 
 ## Dependencies
 
@@ -200,6 +223,9 @@ python trunk_angle_calculator.py
 # Calculate bilateral arm angles with trunk reference
 python export_arm_analysis_with_angles.py
 
+# Combine multiple angle data sources into unified CSV
+python create_combined_angles_csv.py
+
 # Export to Blender with enhanced visualization
 python export_trunk_vectors_with_angle_to_blender.py
 python export_to_blender.py
@@ -212,6 +238,10 @@ python interactive_3d_viewer.py
 
 # Analyze frame skip performance
 python analyze_frame_skip.py
+
+# Generate mesh video outputs
+python generate_mesh_video.py
+python generate_4videos_from_pkl.py
 ```
 
 ### Data Export Capabilities
@@ -227,12 +257,42 @@ The pipeline supports multiple export formats:
 PKL Mesh Data → Trunk Vector Analysis → Blender Export → Professional Animation
 ```
 
+## File Structure and Key Locations
+
+### Main Pipeline Files
+- `production_3d_pipeline_clean.py` - Primary 3D mesh generation pipeline (production-ready)
+- `pracovni_poloha2/main.py` - 2D trunk analysis entry point
+- `arm_angle_calculator.py` - Core arm angle calculation engine
+- `trunk_angle_calculator.py` - 3D trunk angle analysis tool
+
+### Test and Validation Scripts
+- `quick_test_3_frames.py` - Fast pipeline validation (3 frames)
+- `validate_complete_pipeline.py` - Full system validation
+- `test_arm_angles.py` - Arm angle calculation validation
+
+### Setup and Deployment
+- `setup_runpod.py` - Automated RunPod GPU environment setup
+- `setup_runpod_conda.py` - Conda-based RunPod setup (recommended)
+- `requirements_runpod.txt` - GPU-optimized dependencies
+
+### Export and Analysis
+- `create_combined_angles_csv.py` - Unified CSV export for all angle data
+- `interactive_3d_viewer.py` - Real-time 3D mesh visualization
+- `blender_export/` - Blender integration scripts directory
+
+### Documentation
+- `README.md` - Project overview and quick start
+- `RUNPOD_DEPLOYMENT_GUIDE.md` - Comprehensive GPU deployment guide
+- `FINAL_IMPLEMENTATION_REPORT.md` - Technical implementation details
+- `TROUBLESHOOTING.md` - Common issues and solutions
+
 ## Important Notes
 
 - Always use `conda activate trunk_analysis` before running any scripts
 - SMPL-X models must be manually downloaded and placed in `models/smplx/`
 - For GPU processing, ensure CUDA 11.8+ compatibility
-- Use RunPod RTX 4090 for optimal 3D pipeline performance
-- The repository includes extensive documentation in multiple `.md` files for specific use cases
+- Use RunPod RTX 4090 for optimal 3D pipeline performance (2-3s/frame)
 - Large OBJ export sequences (400+ files) are generated in `trunk_analysis_export/` directory
 - Trunk angle statistics are saved as `trunk_angle_statistics.txt`
+- Enhanced arm analysis creates `enhanced_arm_analysis_export/` directory with combined visualizations
+- All PKL files contain complete mesh sequence data and can be analyzed independently

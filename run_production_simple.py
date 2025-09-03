@@ -332,6 +332,9 @@ class HighAccuracySMPLXFitter:
         self.max_history = 5
         self.temporal_alpha = 0.3
         
+        # Batch processing support
+        self.supports_batch = True
+        
     def _verify_model_files(self):
         """Verify all required SMPL-X model files exist"""
         required_files = [f"SMPLX_{self.gender.upper()}.npz"]
@@ -495,6 +498,155 @@ class HighAccuracySMPLXFitter:
             'connections': connections,
             'is_wireframe': True
         }
+    
+    def fit_mesh_to_landmarks_batch(self, landmarks_batch, weights_batch=None, iterations=250):
+        """Batch fitting of SMPL-X meshes for multiple frames simultaneously
+        
+        Args:
+            landmarks_batch: List of landmark arrays [(33, 3), ...]
+            weights_batch: List of weight arrays (optional)
+            iterations: Number of optimization iterations
+            
+        Returns:
+            List of mesh_data dictionaries (same format as single fitting)
+        """
+        if not self.model_ready or len(landmarks_batch) == 0:
+            # Fallback to individual processing
+            return [self.fit_mesh_to_landmarks(landmarks, weights) 
+                    for landmarks, weights in zip(landmarks_batch, weights_batch or [None] * len(landmarks_batch))]
+        
+        batch_size = len(landmarks_batch)
+        print(f"  Batch fitting {batch_size} frames...")
+        
+        # Prepare batch tensors
+        batch_landmarks = []
+        batch_weights = []
+        
+        for i, landmarks in enumerate(landmarks_batch):
+            if landmarks is not None and len(landmarks) > 0:
+                batch_landmarks.append(torch.tensor(landmarks, dtype=torch.float32, device=self.device))
+                
+                if weights_batch and i < len(weights_batch) and weights_batch[i] is not None:
+                    batch_weights.append(torch.tensor(weights_batch[i], dtype=torch.float32, device=self.device))
+                else:
+                    batch_weights.append(torch.ones(len(landmarks), device=self.device))
+            else:
+                # Handle invalid landmarks
+                batch_landmarks.append(torch.zeros((33, 3), device=self.device))
+                batch_weights.append(torch.ones(33, device=self.device) * 0.1)
+        
+        if not batch_landmarks:
+            return []
+        
+        # Stack into batch tensors
+        target_batch = torch.stack(batch_landmarks)  # (batch_size, 33, 3)
+        weights_batch_tensor = torch.stack(batch_weights)  # (batch_size, 33)
+        
+        # Initialize parameters for batch
+        body_pose = torch.zeros((batch_size, 63), device=self.device, requires_grad=True)
+        global_orient = torch.zeros((batch_size, 3), device=self.device, requires_grad=True) 
+        transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
+        betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=True)
+        
+        # Smart initialization from history
+        if len(self.param_history) > 0:
+            last_params = self.param_history[-1]
+            # Repeat last parameters for all batch items
+            body_pose.data = last_params['body_pose'].repeat(batch_size, 1)
+            global_orient.data = last_params['global_orient'].repeat(batch_size, 1)
+            transl.data = last_params['transl'].repeat(batch_size, 1) 
+            betas.data = last_params['betas'].repeat(batch_size, 1)
+        
+        # Multi-stage batch optimization
+        optimization_stages = [
+            {'lr': 0.1, 'iterations': 80, 'focus': 'global'},
+            {'lr': 0.05, 'iterations': 100, 'focus': 'pose'},  
+            {'lr': 0.01, 'iterations': 70, 'focus': 'refinement'}
+        ]
+        
+        best_loss = float('inf')
+        best_params = None
+        
+        for stage_idx, stage in enumerate(optimization_stages):
+            # Stage-specific optimizer  
+            if stage['focus'] == 'global':
+                optimizer = optim.Adam([global_orient, transl], lr=stage['lr'])
+            elif stage['focus'] == 'pose':
+                optimizer = optim.Adam([body_pose, betas], lr=stage['lr'])
+            else:  # refinement
+                optimizer = optim.AdamW([body_pose, global_orient, transl, betas], 
+                                      lr=stage['lr'], weight_decay=1e-4)
+            
+            for i in range(stage['iterations']):
+                optimizer.zero_grad()
+                
+                # Forward pass - batch SMPL-X
+                smpl_output = self.smplx_model(
+                    global_orient=global_orient,
+                    body_pose=body_pose,
+                    transl=transl,
+                    betas=betas
+                )
+                
+                predicted_joints = smpl_output.joints[:, :33, :]  # (batch_size, 33, 3)
+                
+                # Batch loss computation
+                joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
+                joint_loss = torch.mean(joint_diff ** 2)
+                
+                # Regularization terms
+                pose_reg = torch.mean(body_pose ** 2) * 0.001
+                shape_reg = torch.mean(betas ** 2) * 0.0001
+                
+                total_loss = joint_loss + pose_reg + shape_reg
+                
+                total_loss.backward()
+                optimizer.step()
+                
+                if total_loss.item() < best_loss:
+                    best_loss = total_loss.item()
+                    best_params = {
+                        'global_orient': global_orient.clone(),
+                        'body_pose': body_pose.clone(), 
+                        'transl': transl.clone(),
+                        'betas': betas.clone()
+                    }
+        
+        # Generate individual mesh results  
+        mesh_results = []
+        with torch.no_grad():
+            final_output = self.smplx_model(**best_params)
+            
+            for i in range(batch_size):
+                vertices = final_output.vertices[i].cpu().numpy()
+                faces = self.smplx_model.faces
+                joints = final_output.joints[i].cpu().numpy()
+                
+                # Fix orientation (same as single version)
+                vertices[:, 1] *= -1
+                joints[:, 1] *= -1
+                
+                mesh_result = {
+                    'vertices': vertices,
+                    'faces': faces, 
+                    'joints': joints,
+                    'smplx_params': {k: v[i].cpu().numpy() for k, v in best_params.items()},
+                    'fitting_error': best_loss / batch_size,  # Approximate individual error
+                    'vertex_count': len(vertices),
+                    'face_count': len(faces)
+                }
+                
+                mesh_results.append(mesh_result)
+        
+        # Update temporal history with last frame
+        if batch_size > 0:
+            last_frame_params = {k: v[-1:].clone() for k, v in best_params.items()}
+            self.param_history.append(last_frame_params)
+            if len(self.param_history) > self.max_history:
+                self.param_history.pop(0)
+        
+        print(f"  OK Batch fitted {batch_size} meshes, avg error={best_loss:.6f}")
+        return mesh_results
 
 
 class ProfessionalVisualizer:
@@ -837,7 +989,7 @@ class MasterPipeline:
         print("OK Master Pipeline Ready!")
     
     def execute_full_pipeline(self, video_path, output_dir="production_output", 
-                            max_frames=None, frame_skip=1, quality='ultra'):
+                            max_frames=None, frame_skip=1, quality='ultra', batch_size=16):
         """Execute complete pipeline from video to final visualization"""
         
         import time
@@ -874,16 +1026,20 @@ class MasterPipeline:
         print(f"   Resolution: {width}x{height}")
         print(f"   Frame Skip: {frame_skip}")
         print(f"   Quality: {quality}")
+        print(f"   Batch Size: {batch_size}")
         print(f"   Duration: {total_frames/fps:.1f} seconds")
         
-        # Process video frames
-        print(f"\nGEAR  PROCESSING FRAMES...")
+        # BATCH PROCESSING: Extract all landmarks first, then batch process SMPL-X
+        print(f"\nGEAR  PHASE 1: EXTRACT LANDMARKS...")
         print("-" * 70)
         
-        mesh_sequence = []
+        landmarks_batch = []
+        weights_batch = []
+        frame_indices = []
+        converter = PreciseMediaPipeConverter()
         frame_idx = 0
-        successful_frames = 0
         
+        # Phase 1: Extract all MediaPipe landmarks
         while frame_idx < total_frames:
             ret, frame = cap.read()
             if not ret:
@@ -895,7 +1051,8 @@ class MasterPipeline:
                 continue
             
             progress = (frame_idx + 1) / total_frames * 100
-            print(f"Frame {frame_idx+1:4d}/{total_frames} ({progress:5.1f}%)")
+            if frame_idx % 50 == 0 or frame_idx == total_frames - 1:
+                print(f"Extracting landmarks {frame_idx+1:4d}/{total_frames} ({progress:5.1f}%)")
             
             # MediaPipe pose detection
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -903,37 +1060,102 @@ class MasterPipeline:
             
             if results.pose_world_landmarks:
                 # Convert landmarks to SMPL-X format
-                converter = PreciseMediaPipeConverter()
                 joints, weights = converter.convert_landmarks_to_smplx(results.pose_world_landmarks)
                 
                 if joints is not None:
-                    # Fit SMPL-X mesh
-                    mesh_data = self.mesh_fitter.fit_mesh_to_landmarks(joints, weights)
-                    
-                    if mesh_data and not mesh_data.get('is_wireframe', False):
-                        mesh_sequence.append(mesh_data)
-                        successful_frames += 1
-                        
-                        # Update statistics
-                        if 'fitting_error' in mesh_data:
-                            self.stats['average_fitting_error'] += mesh_data['fitting_error']
-                        
-                        print(f"  OK Mesh generated: {mesh_data['vertex_count']} vertices")
-                        
-                        # Save PNG for every successful frame
-                        frame_path = output_dir / f"frame_{frame_idx:04d}_mesh.png"
-                        self.visualizer.render_single_mesh(mesh_data, f"Frame {frame_idx} Mesh",
-                                                         str(frame_path), show_joints=True)
-                    else:
-                        print(f"  ERROR Mesh fitting failed")
+                    landmarks_batch.append(joints)
+                    weights_batch.append(weights)
+                    frame_indices.append(frame_idx)
                 else:
-                    print(f"  ERROR Landmark conversion failed")
+                    # Add None for failed conversion (will be handled in batch processing)
+                    landmarks_batch.append(None)
+                    weights_batch.append(None)
+                    frame_indices.append(frame_idx)
             else:
-                print(f"  ERROR No pose detected")
+                # Add None for failed detection
+                landmarks_batch.append(None)
+                weights_batch.append(None)
+                frame_indices.append(frame_idx)
             
             frame_idx += 1
         
         cap.release()
+        
+        print(f"\nGEAR  PHASE 2: BATCH SMPL-X FITTING...")
+        print("-" * 70)
+        
+        # Phase 2: Batch process SMPL-X fitting
+        mesh_sequence = []
+        successful_frames = 0
+        total_batches = len(landmarks_batch)
+        
+        if total_batches == 0:
+            print("ERROR: No frames to process!")
+            return None
+        
+        # Process in batches
+        for batch_start in range(0, total_batches, batch_size):
+            batch_end = min(batch_start + batch_size, total_batches)
+            current_batch_size = batch_end - batch_start
+            
+            batch_landmarks = landmarks_batch[batch_start:batch_end]
+            batch_weights = weights_batch[batch_start:batch_end]
+            batch_frame_indices = frame_indices[batch_start:batch_end]
+            
+            # Filter out None values for batch processing
+            valid_landmarks = []
+            valid_weights = []
+            valid_indices = []
+            none_positions = []  # Track positions of None values
+            
+            for i, (landmarks, weights, frame_idx) in enumerate(zip(batch_landmarks, batch_weights, batch_frame_indices)):
+                if landmarks is not None:
+                    valid_landmarks.append(landmarks)
+                    valid_weights.append(weights)
+                    valid_indices.append(frame_idx)
+                else:
+                    none_positions.append(i)
+            
+            batch_progress = ((batch_start + current_batch_size) / total_batches) * 100
+            print(f"Processing batch {batch_start//batch_size + 1}: frames {batch_start+1}-{batch_end} ({batch_progress:.1f}%)")
+            
+            # Batch fit SMPL-X meshes
+            if valid_landmarks:
+                batch_meshes = self.mesh_fitter.fit_mesh_to_landmarks_batch(valid_landmarks, valid_weights)
+                
+                # Insert results back in correct positions
+                mesh_results = []
+                valid_idx = 0
+                
+                for i in range(current_batch_size):
+                    if i in none_positions:
+                        mesh_results.append(None)  # Failed frame
+                    else:
+                        if valid_idx < len(batch_meshes):
+                            mesh_data = batch_meshes[valid_idx]
+                            if mesh_data and not mesh_data.get('is_wireframe', False):
+                                mesh_results.append(mesh_data)
+                                successful_frames += 1
+                                
+                                # Update statistics
+                                if 'fitting_error' in mesh_data:
+                                    self.stats['average_fitting_error'] += mesh_data['fitting_error']
+                                    
+                                # Save PNG visualization
+                                frame_idx = batch_frame_indices[i]
+                                frame_path = output_dir / f"frame_{frame_idx:04d}_mesh.png"
+                                self.visualizer.render_single_mesh(mesh_data, f"Frame {frame_idx} Mesh",
+                                                                 str(frame_path), show_joints=True)
+                            else:
+                                mesh_results.append(None)
+                        else:
+                            mesh_results.append(None)
+                        valid_idx += 1
+                
+                # Add successful meshes to sequence
+                for mesh_data in mesh_results:
+                    if mesh_data is not None:
+                        mesh_sequence.append(mesh_data)
         
         # Final statistics
         processing_time = time.time() - start_time
@@ -1007,6 +1229,7 @@ def main():
     max_frames = None
     frame_skip = 1
     quality = 'ultra'
+    batch_size = 16  # Default batch size for GPU processing
     
     # Simple argument parsing
     i = 1
@@ -1033,6 +1256,13 @@ def main():
             else:
                 print("ERROR: --quality requires a value")
                 return
+        elif arg == '--batch-size':
+            if i + 1 < len(sys.argv):
+                batch_size = int(sys.argv[i + 1])
+                i += 2
+            else:
+                print("ERROR: --batch-size requires a value")
+                return
         elif not arg.startswith('--'):
             if video_path is None:
                 video_path = arg
@@ -1048,7 +1278,7 @@ def main():
     
     if not video_path:
         print("ERROR: No video file specified")
-        print("Usage: python run_production_simple.py <video_file> [output_dir] [--max-frames N] [--frame-skip N] [--quality ultra/high/medium]")
+        print("Usage: python run_production_simple.py <video_file> [output_dir] [--max-frames N] [--frame-skip N] [--quality ultra/high/medium] [--batch-size N]")
         return
     
     # Verify SMPL-X models
@@ -1085,7 +1315,8 @@ def main():
         output_dir=output_dir,
         max_frames=max_frames,
         frame_skip=frame_skip,
-        quality=quality
+        quality=quality,
+        batch_size=batch_size
     )
     
     if results:
