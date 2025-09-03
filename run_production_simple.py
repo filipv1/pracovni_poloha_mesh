@@ -633,9 +633,9 @@ class HighAccuracySMPLXFitter:
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
                 joint_loss = torch.mean(joint_diff ** 2)
                 
-                # Regularization terms (reduced to match individual processing)
+                # Regularization terms (reduced to prevent model shrinking)
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
-                shape_reg = torch.mean(betas ** 2) * 0.00001    # Match individual processing
+                shape_reg = torch.mean(betas ** 2) * 0.000001   # REDUCED to prevent shrinking over time
                 
                 # EXACT arm_meshes.pkl TEMPORAL SMOOTHING - Fixed scaling issue  
                 # CRITICAL: Scale temporal_alpha by batch_size to maintain same total smoothing strength
