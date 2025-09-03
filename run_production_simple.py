@@ -334,6 +334,7 @@ class HighAccuracySMPLXFitter:
         
         # Batch processing support
         self.supports_batch = True
+        self.batch_models_cache = {}  # Cache for batch SMPL-X models
         
     def _verify_model_files(self):
         """Verify all required SMPL-X model files exist"""
@@ -518,24 +519,28 @@ class HighAccuracySMPLXFitter:
         batch_size = len(landmarks_batch)
         print(f"  Batch fitting {batch_size} frames...")
         
-        # Create temporary batch SMPL-X model for this batch
-        try:
-            batch_smplx_model = smplx.SMPLX(
-                model_path=str(self.model_path),
-                gender=self.gender,
-                use_face_contour=False,
-                use_hands=False,
-                num_betas=10,
-                num_expression_coeffs=0,
-                create_global_orient=True,
-                create_body_pose=True,
-                create_transl=True,
-                batch_size=batch_size  # Key fix: use actual batch_size
-            ).to(self.device)
-        except Exception as e:
-            print(f"  WARNING: Batch model creation failed ({e}), falling back to individual processing")
-            return [self.fit_mesh_to_landmarks(landmarks, weights) 
-                    for landmarks, weights in zip(landmarks_batch, weights_batch or [None] * len(landmarks_batch))]
+        # Get or create cached batch SMPL-X model for this batch size
+        if batch_size not in self.batch_models_cache:
+            try:
+                self.batch_models_cache[batch_size] = smplx.SMPLX(
+                    model_path=str(self.model_path),
+                    gender=self.gender,
+                    use_face_contour=False,
+                    use_hands=False,
+                    num_betas=10,
+                    num_expression_coeffs=0,
+                    create_global_orient=True,
+                    create_body_pose=True,
+                    create_transl=True,
+                    batch_size=batch_size  # Use actual batch_size
+                ).to(self.device)
+                print(f"  Created batch SMPL-X model for batch_size={batch_size}")
+            except Exception as e:
+                print(f"  WARNING: Batch model creation failed ({e}), falling back to individual processing")
+                return [self.fit_mesh_to_landmarks(landmarks, weights) 
+                        for landmarks, weights in zip(landmarks_batch, weights_batch or [None] * len(landmarks_batch))]
+        
+        batch_smplx_model = self.batch_models_cache[batch_size]
         
         # Prepare batch tensors
         batch_landmarks = []
@@ -607,7 +612,9 @@ class HighAccuracySMPLXFitter:
                     betas=betas
                 )
                 
-                predicted_joints = smpl_output.joints[:, :33, :]  # (batch_size, 33, 3)
+                # Use only the first N joints to match target_batch size
+                num_target_joints = target_batch.shape[1]  # Should be 22 for SMPL-X converted landmarks
+                predicted_joints = smpl_output.joints[:, :num_target_joints, :]  # (batch_size, N, 3)
                 
                 # Batch loss computation
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
@@ -664,12 +671,19 @@ class HighAccuracySMPLXFitter:
             if len(self.param_history) > self.max_history:
                 self.param_history.pop(0)
         
-        # Clean up batch model
-        del batch_smplx_model
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        # Keep batch model in cache for reuse (don't delete)
         
         print(f"  OK Batch fitted {batch_size} meshes, avg error={best_loss:.6f}")
         return mesh_results
+    
+    def clear_batch_cache(self):
+        """Clear cached batch SMPL-X models to free GPU memory"""
+        for model in self.batch_models_cache.values():
+            del model
+        self.batch_models_cache.clear()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("  Cleared batch model cache")
 
 
 class ProfessionalVisualizer:
