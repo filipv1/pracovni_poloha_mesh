@@ -657,33 +657,15 @@ class HighAccuracySMPLXFitter:
                     
                     temporal_loss += sequential_pose_loss + sequential_beta_loss
                 
-                # 3. Sliding window consistency (for large batches)
-                if batch_size > 8:
-                    window_size = min(8, batch_size // 4)  # Adaptive window
-                    for start in range(0, batch_size - window_size, window_size // 2):
-                        end = min(start + window_size, batch_size)
-                        if end > start + 1:
-                            # Local smoothness within sliding windows
-                            window_pose = body_pose[start:end]
-                            window_betas = betas[start:end]
-                            
-                            # Penalize large variations within window
-                            pose_variance = torch.var(window_pose, dim=0).mean()
-                            beta_variance = torch.var(window_betas, dim=0).mean()
-                            
-                            temporal_loss += pose_variance * self.temporal_alpha * 0.2
-                            temporal_loss += beta_variance * self.temporal_alpha * 0.02
+                # 3. Sliding window consistency (DISABLED - caused over-smoothing)
+                # Experimental: Additional smoothing levels caused quality regression
+                # Keep only essential Level 1 & 2 for optimal results
                 
-                # 4. Global smoothness penalty for very large batches
-                if batch_size >= 32:
-                    # Penalize extreme pose changes across entire batch
+                # OPTIONAL: Light global smoothness only for batch >= 64
+                if batch_size >= 64:
+                    # Very light global variance penalty (reduced weight)
                     batch_pose_range = torch.max(body_pose, dim=0)[0] - torch.min(body_pose, dim=0)[0]
-                    batch_beta_range = torch.max(betas, dim=0)[0] - torch.min(betas, dim=0)[0]
-                    
-                    global_smoothness = (
-                        torch.mean(batch_pose_range) * self.temporal_alpha * 0.1 +
-                        torch.mean(batch_beta_range) * self.temporal_alpha * 0.01
-                    )
+                    global_smoothness = torch.mean(batch_pose_range) * self.temporal_alpha * 0.02  # Much lower weight
                     temporal_loss += global_smoothness
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
