@@ -595,12 +595,16 @@ class HighAccuracySMPLXFitter:
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
         
         # DYNAMIC SHAPE PARAMETERS - optimize first batch, freeze subsequent ones
-        if self.global_fixed_betas is None:
-            # First batch: OPTIMIZE shape parameters to fit person
-            betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=True)
-            print(f"  OPTIMIZING: Shape parameters for person fitting (first batch)")
+        is_first_batch = self.global_fixed_betas is None
+        
+        if is_first_batch:
+            # First batch: ALL frames share same shape parameters (person's body is consistent!)
+            shared_betas = torch.zeros(10, device=self.device, requires_grad=True)
+            betas = shared_betas.unsqueeze(0).expand(batch_size, -1)  # All frames use same shape
+            print(f"  OPTIMIZING: Shared shape parameters for consistent person fitting (first batch)")
         else:
-            # Subsequent batches: FROZEN shape parameters
+            # Subsequent batches: FROZEN shape parameters  
+            shared_betas = None  # Not used, but define for code consistency
             betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)
             betas.data[:] = self.global_fixed_betas.expand(batch_size, -1)  # Proper broadcasting
             print(f"  LOCKED: Using fixed shape parameters (norm: {torch.norm(self.global_fixed_betas).item():.4f})")
@@ -629,14 +633,14 @@ class HighAccuracySMPLXFitter:
             if stage['focus'] == 'global':
                 optimizer = optim.Adam([global_orient, transl], lr=stage['lr'])
             elif stage['focus'] == 'pose':
-                if self.global_fixed_betas is None:
-                    optimizer = optim.Adam([body_pose, betas], lr=stage['lr'])  # First batch: optimize shape
+                if is_first_batch:
+                    optimizer = optim.Adam([body_pose, shared_betas], lr=stage['lr'])  # First batch: optimize shared shape
                 else:
                     optimizer = optim.Adam([body_pose], lr=stage['lr'])  # Subsequent: frozen shape
             else:  # refinement
-                if self.global_fixed_betas is None:
-                    optimizer = optim.AdamW([body_pose, global_orient, transl, betas], 
-                                          lr=stage['lr'], weight_decay=1e-4)  # First batch: optimize shape
+                if is_first_batch:
+                    optimizer = optim.AdamW([body_pose, global_orient, transl, shared_betas], 
+                                          lr=stage['lr'], weight_decay=1e-4)  # First batch: optimize shared shape
                 else:
                     optimizer = optim.AdamW([body_pose, global_orient, transl], 
                                           lr=stage['lr'], weight_decay=1e-4)  # Subsequent: frozen shape
@@ -663,9 +667,9 @@ class HighAccuracySMPLXFitter:
                 # Regularization terms - Dynamic based on batch type
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Prevent extreme poses
                 
-                # Shape regularization only for first batch (when optimizing betas)
-                if self.global_fixed_betas is None:
-                    shape_reg = torch.mean(betas ** 2) * 0.0001  # First batch: prevent extreme shapes
+                # Shape regularization only for first batch (when optimizing shared_betas)
+                if is_first_batch:
+                    shape_reg = torch.mean(shared_betas ** 2) * 0.0001  # First batch: prevent extreme shapes
                 else:
                     shape_reg = 0.0  # Subsequent batches: no shape optimization
                 
@@ -728,8 +732,8 @@ class HighAccuracySMPLXFitter:
                 self.param_history.pop(0)
         
         # Set global fixed shape parameters after first batch (like arm_meshes.pkl)
-        if self.global_fixed_betas is None and len(mesh_results) > 0:
-            self.global_fixed_betas = best_params['betas'][0:1].clone().detach()  # Fix shape from first successful batch
+        if is_first_batch and len(mesh_results) > 0:
+            self.global_fixed_betas = shared_betas.unsqueeze(0).clone().detach()  # Fix shared shape from first batch
             print(f"  LOCKED: Global shape parameters fixed from first batch (norm: {torch.norm(self.global_fixed_betas).item():.4f})")
         
         # Keep batch model in cache for reuse (don't delete)
