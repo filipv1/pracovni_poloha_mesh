@@ -607,7 +607,7 @@ class HighAccuracySMPLXFitter:
                     body_pose.data[i:i+1] = last_params['body_pose'] + torch.randn_like(last_params['body_pose']) * 0.1  # 10x larger for natural pose variation
                     global_orient.data[i:i+1] = last_params['global_orient'] + torch.randn_like(last_params['global_orient']) * 0.05  # 5x larger for orientation
                     transl.data[i:i+1] = last_params['transl'] + torch.randn_like(last_params['transl']) * 0.02  # 2x larger for translation
-                    betas.data[i:i+1] = last_params['betas'] + torch.randn_like(last_params['betas']) * 0.02  # Allow shape variation
+                    betas.data[i:i+1] = last_params['betas']  # CRITICAL: Keep identical shape parameters to prevent drift
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -653,7 +653,7 @@ class HighAccuracySMPLXFitter:
                 
                 # Regularization terms - EXACT arm_meshes.pkl matching
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
-                shape_reg = torch.mean(betas ** 2) * 0.00001    # RESTORED to match individual processing
+                shape_reg = torch.mean(betas ** 2) * 0.0001    # STRENGTHENED to prevent shape drift (10x stronger)
                 
                 # TEMPORAL SMOOTHING - Batch-optimized for natural movement
                 # CRITICAL: Scale by batch size because all frames optimize simultaneously
@@ -664,8 +664,8 @@ class HighAccuracySMPLXFitter:
                 if len(self.param_history) > 0:
                     prev_params = self.param_history[-1]
                     temporal_loss += (
-                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * batch_scaled_temporal_alpha +
-                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * batch_scaled_temporal_alpha * 0.1
+                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * batch_scaled_temporal_alpha
+                        # REMOVED: betas inter-batch smoothing to prevent shape drift
                     )
                 
                 # 2. Intra-batch smoothing (each frame with previous frame in batch)
@@ -673,8 +673,8 @@ class HighAccuracySMPLXFitter:
                 if batch_size > 1:
                     for i in range(1, batch_size):
                         frame_to_frame_loss = (
-                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * batch_scaled_temporal_alpha +
-                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * batch_scaled_temporal_alpha * 0.1
+                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * batch_scaled_temporal_alpha
+                            # REMOVED: betas intra-batch smoothing (all betas identical within batch)
                         )
                         temporal_loss += frame_to_frame_loss
                 
