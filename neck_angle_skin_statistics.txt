@@ -1,0 +1,27 @@
+NECK ANGLE STATISTICS (SKIN-BASED)
+==================================================
+
+Using skin vertices:
+  Cervical (neck base): 2151
+  Head: 9002
+  Lumbar (trunk ref): 5614
+
+Total frames analyzed: 499
+
+SAGITTAL ANGLE STATISTICS (forward/back):
+  Mean: -2.41°
+  Std Dev: 15.37°
+  Min: -29.47°
+  Max: 61.97°
+  Median: -0.70°
+
+FRONTAL ANGLE STATISTICS (side tilt):
+  Mean: 8.19°
+  Std Dev: 12.17°
+  Min: -18.34°
+  Max: 50.41°
+
+NECK POSTURE DISTRIBUTION:
+  Neutral (-15° to 15°): 323 frames (64.7%)
+  Forward (>15°): 40 frames (8.0%)
+  Backward (<-15°): 136 frames (27.3%)

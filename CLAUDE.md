@@ -39,15 +39,11 @@ python export_arm_analysis_with_angles.py
 python debug_arm_sides.py
 python test_arm_angles.py
 
-# Debug and validate data
-python show_pkl_data.py
-python explore_joints.py
-```
+# Combined angle CSV generation
+python create_combined_angles_csv.py fil_vid_meshes.pkl combined_angles.csv
 
-### Linting and Quality Checks
-```bash
-# No specific lint commands found - add as needed for code quality
-# Consider adding: ruff check, black, mypy when implementing
+# Neck angle analysis with stable algorithm
+python neck_angle_calculator_like_arm.py
 ```
 
 ### RunPod Deployment
@@ -61,7 +57,7 @@ python setup_runpod_conda.py
 
 ## Architecture Overview
 
-This repository contains two main systems:
+This repository contains three main systems:
 
 ### 1. 3D Human Mesh Pipeline (Production)
 - **Entry Point**: `production_3d_pipeline_clean.py` (main pipeline)
@@ -87,30 +83,17 @@ This repository contains two main systems:
 - `TrunkAngleCalculator` - Angle computation and analysis
 - `SkeletonVisualizer` - Video overlay visualization
 
-### 3. 3D Arm Angle Analysis System (NEW)
-- **Entry Point**: `export_arm_analysis_with_angles.py`
-- **Technology**: SMPL-X joint data + anatomical coordinate systems + 3D vector math
-- **Purpose**: Calculate bilateral arm angles relative to trunk orientation with high precision
-- **Output**: Enhanced OBJ sequences with angle data, comprehensive statistics, Blender-ready visualization
+### 3. Advanced Angle Analysis System (NEW)
+- **Bilateral Arm Angles**: `arm_angle_calculator.py` - Robust anatomical angle calculation
+- **Neck Angles**: `neck_angle_calculator_like_arm.py` - Stable neck angle using arm algorithm
+- **Combined Export**: `create_combined_angles_csv.py` - Simple CSV with all angles
+- **Enhanced Visualization**: `export_arm_analysis_with_angles.py` - OBJ with angle data
 
-**Key Components:**
-- `arm_angle_calculator.py` - Robust anatomical angle calculation engine
-- `export_arm_analysis_with_angles.py` - Enhanced export with trunk+arm vector combinations
-- `debug_arm_sides.py` - Joint assignment verification tool
-- `test_arm_angles.py` - Synthetic pose validation suite
-- `neck_angle_calculator_like_arm.py` - Stable neck angle calculator using arm calculator logic
-
-### 4. Data Analysis and Visualization Tools
-- **Entry Points**: Multiple analysis and export scripts
-- **Technology**: NumPy + Matplotlib + Blender integration + CSV export
-- **Purpose**: Extract insights from processed mesh data and create visualizations
-- **Output**: Statistics, interactive viewers, Blender animations, CSV reports
-
-**Key Components:**
-- `trunk_angle_calculator.py` - Extract trunk bending statistics from mesh data
-- `create_combined_angles_csv.py` - Combine multiple angle data sources into unified CSV
-- `interactive_3d_viewer.py` - Real-time 3D mesh visualization
-- `analyze_frame_skip.py` - Performance analysis for optimization
+**Key Features:**
+- Anatomically correct coordinate systems
+- Handles all body orientations robustly
+- Sagittal and frontal plane measurements
+- Frame-stable calculations with confidence scoring
 
 ## Dependencies
 
@@ -144,14 +127,9 @@ Input Video → MediaPipe (33 3D landmarks) → SMPL-X Fitting → Open3D Render
 Input Video → MediaPipe (33 2D landmarks) → Angle Calculation → Visualization → Output
 ```
 
-### 3D Trunk Angle Analysis
+### 3D Angle Analysis
 ```
-PKL Mesh Data → Joint Extraction → Trunk Vector Calculation → Angle Analysis → Statistics Export
-```
-
-### 3D Arm Angle Analysis (NEW)
-```
-PKL Mesh Data → Joint Extraction → Anatomical Coordinate System → Arm-to-Trunk Angle Calculation → Enhanced Visualization Export
+PKL Mesh Data → Joint Extraction → Anatomical Coordinate System → Multi-angle Calculation → CSV/OBJ Export
 ```
 
 ## Performance Characteristics
@@ -192,27 +170,23 @@ processor = TrunkAnalysisProcessor(
 )
 ```
 
-### Trunk Angle Analysis (3D Pipeline)
+### Angle Analysis (3D Pipeline)
 ```python
+# Trunk angles
 from trunk_angle_calculator import TrunkAngleCalculator
-
 calculator = TrunkAngleCalculator()
 angles_data = calculator.calculate_angles_from_pkl('meshes.pkl')
 calculator.export_statistics('trunk_angle_statistics.txt')
-```
 
-### 3D Arm Angle Analysis (NEW)
-```python
+# Combined angles (trunk + neck + arms)
+from create_combined_angles_csv import create_combined_angles_csv
+create_combined_angles_csv('fil_vid_meshes.pkl', 'combined_angles.csv')
+
+# Bilateral arm angles
 from arm_angle_calculator import calculate_bilateral_arm_angles
-from export_arm_analysis_with_angles import create_enhanced_arm_analysis_export
-
-# Calculate arm angles for single frame
 result = calculate_bilateral_arm_angles(joints_3d)
 left_angle = result['left_arm']['sagittal_angle']  # 0°=hanging, +90°=forward, -90°=backward
 right_angle = result['right_arm']['sagittal_angle']
-
-# Export complete enhanced analysis
-create_enhanced_arm_analysis_export('arm_meshes.pkl', 'enhanced_arm_analysis_export')
 ```
 
 ### Export and Analysis Tools
@@ -220,28 +194,23 @@ create_enhanced_arm_analysis_export('arm_meshes.pkl', 'enhanced_arm_analysis_exp
 # Calculate trunk angles from existing mesh data
 python trunk_angle_calculator.py
 
-# Calculate bilateral arm angles with trunk reference
-python export_arm_analysis_with_angles.py
-
-# Combine multiple angle data sources into unified CSV
-python create_combined_angles_csv.py
+# Create combined CSV with all angles
+python create_combined_angles_csv.py fil_vid_meshes.pkl
 
 # Export to Blender with enhanced visualization
 python export_trunk_vectors_with_angle_to_blender.py
 python export_to_blender.py
 
-# Blender import for enhanced arm+trunk visualization
-# Load: blender_export/side_by_side_arm_and_trunk_sequence.py
+# Blender import scripts in blender_export/:
+# - side_by_side_arm_and_trunk_sequence.py
+# - combined_mesh_and_trunk_sequence.py
+# - trunk_vector_sequence.py
 
 # Interactive 3D visualization
 python interactive_3d_viewer.py
 
 # Analyze frame skip performance
 python analyze_frame_skip.py
-
-# Generate mesh video outputs
-python generate_mesh_video.py
-python generate_4videos_from_pkl.py
 ```
 
 ### Data Export Capabilities
@@ -252,47 +221,26 @@ The pipeline supports multiple export formats:
 - **CSV data**: Angle measurements and statistics
 - **Visualization**: Professional 3D renders and animations
 
-### Blender Integration Workflow
-```
-PKL Mesh Data → Trunk Vector Analysis → Blender Export → Professional Animation
-```
-
-## File Structure and Key Locations
-
-### Main Pipeline Files
-- `production_3d_pipeline_clean.py` - Primary 3D mesh generation pipeline (production-ready)
-- `pracovni_poloha2/main.py` - 2D trunk analysis entry point
-- `arm_angle_calculator.py` - Core arm angle calculation engine
-- `trunk_angle_calculator.py` - 3D trunk angle analysis tool
-
-### Test and Validation Scripts
-- `quick_test_3_frames.py` - Fast pipeline validation (3 frames)
-- `validate_complete_pipeline.py` - Full system validation
-- `test_arm_angles.py` - Arm angle calculation validation
-
-### Setup and Deployment
-- `setup_runpod.py` - Automated RunPod GPU environment setup
-- `setup_runpod_conda.py` - Conda-based RunPod setup (recommended)
-- `requirements_runpod.txt` - GPU-optimized dependencies
-
-### Export and Analysis
-- `create_combined_angles_csv.py` - Unified CSV export for all angle data
-- `interactive_3d_viewer.py` - Real-time 3D mesh visualization
-- `blender_export/` - Blender integration scripts directory
-
-### Documentation
-- `README.md` - Project overview and quick start
-- `RUNPOD_DEPLOYMENT_GUIDE.md` - Comprehensive GPU deployment guide
-- `FINAL_IMPLEMENTATION_REPORT.md` - Technical implementation details
-- `TROUBLESHOOTING.md` - Common issues and solutions
-
 ## Important Notes
 
 - Always use `conda activate trunk_analysis` before running any scripts
 - SMPL-X models must be manually downloaded and placed in `models/smplx/`
 - For GPU processing, ensure CUDA 11.8+ compatibility
-- Use RunPod RTX 4090 for optimal 3D pipeline performance (2-3s/frame)
+- Use RunPod RTX 4090 for optimal 3D pipeline performance
+- The repository includes extensive documentation in multiple `.md` files for specific use cases
 - Large OBJ export sequences (400+ files) are generated in `trunk_analysis_export/` directory
 - Trunk angle statistics are saved as `trunk_angle_statistics.txt`
-- Enhanced arm analysis creates `enhanced_arm_analysis_export/` directory with combined visualizations
-- All PKL files contain complete mesh sequence data and can be analyzed independently
+- Combined angle data (trunk+neck+arms) exported as CSV for analysis
+
+## SMPL-X Joint Indices Reference
+Key joints used in calculations:
+- 0: pelvis (root)
+- 3: spine1 (lumbar L3/L4)
+- 6: spine2 (mid spine)
+- 9: spine3 (upper spine)
+- 12: neck (cervical C7/T1)
+- 15: head
+- 16: right_shoulder
+- 17: left_shoulder
+- 18: right_elbow
+- 19: left_elbow

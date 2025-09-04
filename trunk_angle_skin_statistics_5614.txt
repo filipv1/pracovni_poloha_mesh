@@ -1,0 +1,27 @@
+TRUNK ANGLE STATISTICS (SKIN-BASED)
+==================================================
+
+Using skin vertices:
+  Lumbar vertex: 5614
+  Cervical vertex: 2151
+
+Total frames analyzed: 499
+
+ANGLE STATISTICS:
+  Mean: 60.61°
+  Std Dev: 32.18°
+  Min: 1.49°
+  Max: 120.51°
+  25th percentile: 23.60°
+  50th percentile (median): 70.59°
+  75th percentile: 88.80°
+
+POSTURE DISTRIBUTION:
+  Upright (<15°): 66 frames (13.2%)
+  Slight bend (15-30°): 67 frames (13.4%)
+  Moderate bend (30-60°): 74 frames (14.8%)
+  Severe bend (≥60°): 292 frames (58.5%)
+
+LEAN DIRECTION:
+  Forward lean: 213 frames (42.7%)
+  Backward lean: 286 frames (57.3%)

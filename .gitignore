@@ -29,6 +29,14 @@ gpu_test_output/
 frames/
 temp_frames/
 
+# Large OBJ export directories
+blender_export/
+blender_export_all/
+blender_export_skin/
+trunk_analysis_export/
+enhanced_arm_analysis_export/
+*.obj
+
 # Generated files
 *.pkl
 *.mp4

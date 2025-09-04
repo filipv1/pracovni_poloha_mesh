@@ -1,4 +1,4 @@
-.#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Combined Angles CSV Creator
 Creates single CSV with: frame, trunk_angle, neck_angle, left_arm_angle, right_arm_angle
@@ -142,7 +142,7 @@ def main():
         return
     
     # Create combined CSV
-    output_file = create_combined_angles_csv(pkl_file, "combined_angles.csv")
+    output_file = create_combined_angles_csv(pkl_file, "arm_meshes.csv")
     
     if output_file:
         print(f"\nREADY FOR ANALYSIS:")
