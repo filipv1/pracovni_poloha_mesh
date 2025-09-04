@@ -593,15 +593,17 @@ class HighAccuracySMPLXFitter:
         body_pose = torch.zeros((batch_size, 63), device=self.device, requires_grad=True)
         global_orient = torch.zeros((batch_size, 3), device=self.device, requires_grad=True) 
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
-        betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)  # FROZEN: No gradients for shape parameters
         
-        # GLOBAL SHAPE PARAMETERS - same for entire video like arm_meshes.pkl
-        if self.global_fixed_betas is not None:
-            # Use globally fixed shape parameters for ALL frames in ALL batches
-            betas.data[:] = self.global_fixed_betas  # CRITICAL: Same shape throughout entire video
+        # DYNAMIC SHAPE PARAMETERS - optimize first batch, freeze subsequent ones
+        if self.global_fixed_betas is None:
+            # First batch: OPTIMIZE shape parameters to fit person
+            betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=True)
+            print(f"  OPTIMIZING: Shape parameters for person fitting (first batch)")
         else:
-            # First batch: use default SMPL-X shape (will be fixed after first optimization)
-            betas.data[:] = 0.0  # Standard human shape
+            # Subsequent batches: FROZEN shape parameters
+            betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)
+            betas.data[:] = self.global_fixed_betas  # Use globally fixed shape
+            print(f"  LOCKED: Using fixed shape parameters (norm: {torch.norm(self.global_fixed_betas).item():.4f})")
         # Let pose parameters start from zero for pure landmark optimization
         
         # Multi-stage batch optimization
@@ -618,14 +620,21 @@ class HighAccuracySMPLXFitter:
         initial_shape_norm = torch.norm(betas).item() if torch.numel(betas) > 0 else 0.0
         
         for stage_idx, stage in enumerate(optimization_stages):
-            # Stage-specific optimizer  
+            # Stage-specific optimizer with dynamic betas inclusion
             if stage['focus'] == 'global':
                 optimizer = optim.Adam([global_orient, transl], lr=stage['lr'])
             elif stage['focus'] == 'pose':
-                optimizer = optim.Adam([body_pose], lr=stage['lr'])  # REMOVED betas to prevent shape drift
+                if self.global_fixed_betas is None:
+                    optimizer = optim.Adam([body_pose, betas], lr=stage['lr'])  # First batch: optimize shape
+                else:
+                    optimizer = optim.Adam([body_pose], lr=stage['lr'])  # Subsequent: frozen shape
             else:  # refinement
-                optimizer = optim.AdamW([body_pose, global_orient, transl], 
-                                      lr=stage['lr'], weight_decay=1e-4)  # REMOVED betas to prevent shape drift
+                if self.global_fixed_betas is None:
+                    optimizer = optim.AdamW([body_pose, global_orient, transl, betas], 
+                                          lr=stage['lr'], weight_decay=1e-4)  # First batch: optimize shape
+                else:
+                    optimizer = optim.AdamW([body_pose, global_orient, transl], 
+                                          lr=stage['lr'], weight_decay=1e-4)  # Subsequent: frozen shape
             
             for i in range(stage['iterations']):
                 optimizer.zero_grad()
