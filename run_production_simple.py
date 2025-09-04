@@ -592,22 +592,12 @@ class HighAccuracySMPLXFitter:
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
         betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)  # FROZEN: No gradients for shape parameters
         
-        # Smart initialization from history (FIXED: prevent discontinuities)
+        # Simple initialization from history for shape consistency only
         if len(self.param_history) > 0:
             last_params = self.param_history[-1]
-            # Initialize first frame exactly from history
-            body_pose.data[0:1] = last_params['body_pose']
-            global_orient.data[0:1] = last_params['global_orient']
-            transl.data[0:1] = last_params['transl']
-            betas.data[0:1] = last_params['betas']  # CRITICAL: Shape continuity
-            
-            # Initialize remaining frames with LARGER random variations for natural movement
-            if batch_size > 1:
-                for i in range(1, batch_size):
-                    body_pose.data[i:i+1] = last_params['body_pose'] + torch.randn_like(last_params['body_pose']) * 0.1  # 10x larger for natural pose variation
-                    global_orient.data[i:i+1] = last_params['global_orient'] + torch.randn_like(last_params['global_orient']) * 0.05  # 5x larger for orientation
-                    transl.data[i:i+1] = last_params['transl'] + torch.randn_like(last_params['transl']) * 0.02  # 2x larger for translation
-                    betas.data[i:i+1] = last_params['betas']  # CRITICAL: Keep identical shape parameters to prevent drift
+            # Use last shape parameters for ALL frames (frozen anyway)
+            betas.data[:] = last_params['betas']  # CRITICAL: Consistent shape across all frames
+            # Let pose parameters start from zero for pure landmark optimization
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -651,34 +641,12 @@ class HighAccuracySMPLXFitter:
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
                 joint_loss = torch.mean(joint_diff ** 2)
                 
-                # Regularization terms - EXACT arm_meshes.pkl matching
-                pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
-                shape_reg = torch.mean(betas ** 2) * 0.0001    # STRENGTHENED to prevent shape drift (10x stronger)
+                # Regularization terms - Only pose regularization (shape frozen)
+                pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Prevent extreme poses
                 
-                # TEMPORAL SMOOTHING - Batch-optimized for natural movement
-                # CRITICAL: Scale by batch size because all frames optimize simultaneously
-                batch_scaled_temporal_alpha = self.temporal_alpha / batch_size if batch_size > 1 else self.temporal_alpha
-                temporal_loss = 0.0
-                
-                # 1. Inter-batch smoothing (first frame with previous batch last frame)
-                if len(self.param_history) > 0:
-                    prev_params = self.param_history[-1]
-                    temporal_loss += (
-                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * batch_scaled_temporal_alpha
-                        # REMOVED: betas inter-batch smoothing to prevent shape drift
-                    )
-                
-                # 2. Intra-batch smoothing (each frame with previous frame in batch)
-                # SCALED: Weaker per connection because all frames optimize together
-                if batch_size > 1:
-                    for i in range(1, batch_size):
-                        frame_to_frame_loss = (
-                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * batch_scaled_temporal_alpha
-                            # REMOVED: betas intra-batch smoothing (all betas identical within batch)
-                        )
-                        temporal_loss += frame_to_frame_loss
-                
-                # RESULT: Properly scaled temporal smoothing for natural movement in batch processing
+                # NO TEMPORAL SMOOTHING - Pure landmark fitting only
+                # Let limbs jump if needed, but prevent ANY model deformation
+                temporal_loss = 0.0  # ZERO smoothing for maximum model stability
                 
                 total_loss = joint_loss + pose_reg + temporal_loss  # REMOVED shape_reg (betas frozen)
                 
