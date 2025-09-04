@@ -602,9 +602,14 @@ class HighAccuracySMPLXFitter:
         else:
             # Subsequent batches: FROZEN shape parameters
             betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)
-            betas.data[:] = self.global_fixed_betas  # Use globally fixed shape
+            betas.data[:] = self.global_fixed_betas.expand(batch_size, -1)  # Proper broadcasting
             print(f"  LOCKED: Using fixed shape parameters (norm: {torch.norm(self.global_fixed_betas).item():.4f})")
-        # Let pose parameters start from zero for pure landmark optimization
+        # Initialize pose parameters from history for continuity (even without temporal smoothing)
+        if len(self.param_history) > 0:
+            last_params = self.param_history[-1]
+            body_pose.data[0:1] = last_params['body_pose']    # First frame continuity
+            global_orient.data[0:1] = last_params['global_orient']
+            transl.data[0:1] = last_params['transl']
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -655,14 +660,19 @@ class HighAccuracySMPLXFitter:
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
                 joint_loss = torch.mean(joint_diff ** 2)
                 
-                # Regularization terms - Only pose regularization (shape frozen)
+                # Regularization terms - Dynamic based on batch type
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Prevent extreme poses
                 
+                # Shape regularization only for first batch (when optimizing betas)
+                if self.global_fixed_betas is None:
+                    shape_reg = torch.mean(betas ** 2) * 0.0001  # First batch: prevent extreme shapes
+                else:
+                    shape_reg = 0.0  # Subsequent batches: no shape optimization
+                
                 # NO TEMPORAL SMOOTHING - Pure landmark fitting only
-                # Let limbs jump if needed, but prevent ANY model deformation
                 temporal_loss = 0.0  # ZERO smoothing for maximum model stability
                 
-                total_loss = joint_loss + pose_reg + temporal_loss  # REMOVED shape_reg (betas frozen)
+                total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
                 total_loss.backward()
                 optimizer.step()
