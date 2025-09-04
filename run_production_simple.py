@@ -590,7 +590,7 @@ class HighAccuracySMPLXFitter:
         body_pose = torch.zeros((batch_size, 63), device=self.device, requires_grad=True)
         global_orient = torch.zeros((batch_size, 3), device=self.device, requires_grad=True) 
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
-        betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=True)
+        betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)  # FROZEN: No gradients for shape parameters
         
         # Smart initialization from history (FIXED: prevent discontinuities)
         if len(self.param_history) > 0:
@@ -680,7 +680,7 @@ class HighAccuracySMPLXFitter:
                 
                 # RESULT: Properly scaled temporal smoothing for natural movement in batch processing
                 
-                total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
+                total_loss = joint_loss + pose_reg + temporal_loss  # REMOVED shape_reg (betas frozen)
                 
                 total_loss.backward()
                 optimizer.step()
@@ -694,12 +694,7 @@ class HighAccuracySMPLXFitter:
                         'betas': betas.clone()
                     }
                     
-                    # Monitor shape parameter stability during optimization
-                    current_shape_norm = torch.norm(betas).item()
-                    if initial_shape_norm > 0:
-                        shape_drift_ratio = abs(current_shape_norm - initial_shape_norm) / initial_shape_norm
-                        if shape_drift_ratio > 0.5:  # 50% change warning
-                            print(f"    WARNING: Large shape drift detected: {shape_drift_ratio:.1%} change")
+                    # Shape parameters are FROZEN - no drift monitoring needed
         
         # Generate individual mesh results  
         mesh_results = []
