@@ -601,13 +601,13 @@ class HighAccuracySMPLXFitter:
             transl.data[0:1] = last_params['transl']
             betas.data[0:1] = last_params['betas']  # CRITICAL: Shape continuity
             
-            # Initialize remaining frames with small random variations to avoid identical poses
+            # Initialize remaining frames with LARGER random variations for natural movement
             if batch_size > 1:
                 for i in range(1, batch_size):
-                    body_pose.data[i:i+1] = last_params['body_pose'] + torch.randn_like(last_params['body_pose']) * 0.01
-                    global_orient.data[i:i+1] = last_params['global_orient'] + torch.randn_like(last_params['global_orient']) * 0.01
-                    transl.data[i:i+1] = last_params['transl'] + torch.randn_like(last_params['transl']) * 0.01
-                    betas.data[i:i+1] = last_params['betas']  # CRITICAL: Keep same shape parameters across batch
+                    body_pose.data[i:i+1] = last_params['body_pose'] + torch.randn_like(last_params['body_pose']) * 0.1  # 10x larger for natural pose variation
+                    global_orient.data[i:i+1] = last_params['global_orient'] + torch.randn_like(last_params['global_orient']) * 0.05  # 5x larger for orientation
+                    transl.data[i:i+1] = last_params['transl'] + torch.randn_like(last_params['transl']) * 0.02  # 2x larger for translation
+                    betas.data[i:i+1] = last_params['betas'] + torch.randn_like(last_params['betas']) * 0.02  # Allow shape variation
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -655,29 +655,30 @@ class HighAccuracySMPLXFitter:
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
                 shape_reg = torch.mean(betas ** 2) * 0.00001    # RESTORED to match individual processing
                 
-                # TEMPORAL SMOOTHING - EXACT arm_meshes.pkl compatibility (FIXED)
-                # CRITICAL: Use same alpha strength as individual processing (no batch scaling)
+                # TEMPORAL SMOOTHING - Batch-optimized for natural movement
+                # CRITICAL: Scale by batch size because all frames optimize simultaneously
+                batch_scaled_temporal_alpha = self.temporal_alpha / batch_size if batch_size > 1 else self.temporal_alpha
                 temporal_loss = 0.0
                 
                 # 1. Inter-batch smoothing (first frame with previous batch last frame)
                 if len(self.param_history) > 0:
                     prev_params = self.param_history[-1]
                     temporal_loss += (
-                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
-                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
+                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * batch_scaled_temporal_alpha +
+                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * batch_scaled_temporal_alpha * 0.1
                     )
                 
                 # 2. Intra-batch smoothing (each frame with previous frame in batch)
-                # FIXED: Same strength as individual processing, no scaling
+                # SCALED: Weaker per connection because all frames optimize together
                 if batch_size > 1:
                     for i in range(1, batch_size):
                         frame_to_frame_loss = (
-                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * self.temporal_alpha +
-                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * self.temporal_alpha * 0.1
+                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * batch_scaled_temporal_alpha +
+                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * batch_scaled_temporal_alpha * 0.1
                         )
                         temporal_loss += frame_to_frame_loss
                 
-                # RESULT: Identical temporal smoothing strength as arm_meshes.pkl individual processing
+                # RESULT: Properly scaled temporal smoothing for natural movement in batch processing
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
