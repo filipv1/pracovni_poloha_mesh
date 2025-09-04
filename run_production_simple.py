@@ -333,6 +333,9 @@ class HighAccuracySMPLXFitter:
         self.temporal_alpha = 0.3  # Keep for individual processing compatibility
         self.max_recommended_batch_size = 128  # Add missing attribute
         
+        # GLOBAL FIXED SHAPE PARAMETERS - same for entire video like arm_meshes.pkl
+        self.global_fixed_betas = None  # Will be set from first successful fit
+        
         # DISABLE complex predictions - keep it simple like arm_meshes.pkl
         self.limb_predictor = None
         print("INFO: Using simple processing for natural movement (arm_meshes.pkl style)")
@@ -592,12 +595,14 @@ class HighAccuracySMPLXFitter:
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
         betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=False)  # FROZEN: No gradients for shape parameters
         
-        # Simple initialization from history for shape consistency only
-        if len(self.param_history) > 0:
-            last_params = self.param_history[-1]
-            # Use last shape parameters for ALL frames (frozen anyway)
-            betas.data[:] = last_params['betas']  # CRITICAL: Consistent shape across all frames
-            # Let pose parameters start from zero for pure landmark optimization
+        # GLOBAL SHAPE PARAMETERS - same for entire video like arm_meshes.pkl
+        if self.global_fixed_betas is not None:
+            # Use globally fixed shape parameters for ALL frames in ALL batches
+            betas.data[:] = self.global_fixed_betas  # CRITICAL: Same shape throughout entire video
+        else:
+            # First batch: use default SMPL-X shape (will be fixed after first optimization)
+            betas.data[:] = 0.0  # Standard human shape
+        # Let pose parameters start from zero for pure landmark optimization
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -703,13 +708,12 @@ class HighAccuracySMPLXFitter:
             if len(self.param_history) > self.max_history:
                 self.param_history.pop(0)
         
-        # Keep batch model in cache for reuse (don't delete)
+        # Set global fixed shape parameters after first batch (like arm_meshes.pkl)
+        if self.global_fixed_betas is None and len(mesh_results) > 0:
+            self.global_fixed_betas = best_params['betas'][0:1].clone().detach()  # Fix shape from first successful batch
+            print(f"  LOCKED: Global shape parameters fixed from first batch (norm: {torch.norm(self.global_fixed_betas).item():.4f})")
         
-        # Final shape parameter stability report
-        if len(mesh_results) > 0 and initial_shape_norm > 0:
-            final_shape_norm = torch.norm(best_params['betas'][-1:]).item()
-            total_shape_drift = abs(final_shape_norm - initial_shape_norm) / initial_shape_norm
-            print(f"  Shape stability: {total_shape_drift:.1%} total drift (norm: {initial_shape_norm:.4f} → {final_shape_norm:.4f})")
+        # Keep batch model in cache for reuse (don't delete)
         
         print(f"  OK Batch fitted {batch_size} meshes, avg error={best_loss:.6f}")
         return mesh_results
