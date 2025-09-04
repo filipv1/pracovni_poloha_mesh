@@ -627,10 +627,10 @@ class HighAccuracySMPLXFitter:
             if stage['focus'] == 'global':
                 optimizer = optim.Adam([global_orient, transl], lr=stage['lr'])
             elif stage['focus'] == 'pose':
-                optimizer = optim.Adam([body_pose, betas], lr=stage['lr'])
+                optimizer = optim.Adam([body_pose], lr=stage['lr'])  # REMOVED betas to prevent shape drift
             else:  # refinement
-                optimizer = optim.AdamW([body_pose, global_orient, transl, betas], 
-                                      lr=stage['lr'], weight_decay=1e-4)
+                optimizer = optim.AdamW([body_pose, global_orient, transl], 
+                                      lr=stage['lr'], weight_decay=1e-4)  # REMOVED betas to prevent shape drift
             
             for i in range(stage['iterations']):
                 optimizer.zero_grad()
