@@ -530,7 +530,14 @@ class HighAccuracySMPLXFitter:
         elif batch_size > 64:
             print(f"  INFO: Large batch size ({batch_size}) - using advanced hierarchical temporal smoothing")
         
+        # Shape parameter stability monitoring
+        initial_shape_norm = 0.0
+        if len(self.param_history) > 0:
+            initial_shape_norm = torch.norm(self.param_history[-1]['betas']).item()
+        
         print(f"  Batch fitting {batch_size} frames with hierarchical temporal smoothing...")
+        if initial_shape_norm > 0:
+            print(f"  Initial shape parameter norm: {initial_shape_norm:.6f}")
         
         # Get or create cached batch SMPL-X model for this batch size
         if batch_size not in self.batch_models_cache:
@@ -585,14 +592,22 @@ class HighAccuracySMPLXFitter:
         transl = torch.zeros((batch_size, 3), device=self.device, requires_grad=True)
         betas = torch.zeros((batch_size, 10), device=self.device, requires_grad=True)
         
-        # Smart initialization from history
+        # Smart initialization from history (FIXED: prevent discontinuities)
         if len(self.param_history) > 0:
             last_params = self.param_history[-1]
-            # Repeat last parameters for all batch items
-            body_pose.data = last_params['body_pose'].repeat(batch_size, 1)
-            global_orient.data = last_params['global_orient'].repeat(batch_size, 1)
-            transl.data = last_params['transl'].repeat(batch_size, 1) 
-            betas.data = last_params['betas'].repeat(batch_size, 1)
+            # Initialize first frame exactly from history
+            body_pose.data[0:1] = last_params['body_pose']
+            global_orient.data[0:1] = last_params['global_orient']
+            transl.data[0:1] = last_params['transl']
+            betas.data[0:1] = last_params['betas']  # CRITICAL: Shape continuity
+            
+            # Initialize remaining frames with small random variations to avoid identical poses
+            if batch_size > 1:
+                for i in range(1, batch_size):
+                    body_pose.data[i:i+1] = last_params['body_pose'] + torch.randn_like(last_params['body_pose']) * 0.01
+                    global_orient.data[i:i+1] = last_params['global_orient'] + torch.randn_like(last_params['global_orient']) * 0.01
+                    transl.data[i:i+1] = last_params['transl'] + torch.randn_like(last_params['transl']) * 0.01
+                    betas.data[i:i+1] = last_params['betas']  # CRITICAL: Keep same shape parameters across batch
         
         # Multi-stage batch optimization
         optimization_stages = [
@@ -603,6 +618,9 @@ class HighAccuracySMPLXFitter:
         
         best_loss = float('inf')
         best_params = None
+        
+        # Shape monitoring initialization
+        initial_shape_norm = torch.norm(betas).item() if torch.numel(betas) > 0 else 0.0
         
         for stage_idx, stage in enumerate(optimization_stages):
             # Stage-specific optimizer  
@@ -633,34 +651,33 @@ class HighAccuracySMPLXFitter:
                 joint_diff = (predicted_joints - target_batch) * weights_batch_tensor.unsqueeze(-1)
                 joint_loss = torch.mean(joint_diff ** 2)
                 
-                # Regularization terms (reduced to prevent model shrinking)
+                # Regularization terms - EXACT arm_meshes.pkl matching
                 pose_reg = torch.mean(body_pose ** 2) * 0.0001  # Match individual processing
-                shape_reg = torch.mean(betas ** 2) * 0.000001   # REDUCED to prevent shrinking over time
+                shape_reg = torch.mean(betas ** 2) * 0.00001    # RESTORED to match individual processing
                 
-                # EXACT arm_meshes.pkl TEMPORAL SMOOTHING - Fixed scaling issue  
-                # CRITICAL: Scale temporal_alpha by batch_size to maintain same total smoothing strength
-                batch_scaled_temporal_alpha = self.temporal_alpha / batch_size if batch_size > 1 else self.temporal_alpha
+                # TEMPORAL SMOOTHING - EXACT arm_meshes.pkl compatibility (FIXED)
+                # CRITICAL: Use same alpha strength as individual processing (no batch scaling)
                 temporal_loss = 0.0
                 
-                # 1. Inter-batch smoothing (frame 0 with previous batch)
+                # 1. Inter-batch smoothing (first frame with previous batch last frame)
                 if len(self.param_history) > 0:
                     prev_params = self.param_history[-1]
                     temporal_loss += (
-                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * batch_scaled_temporal_alpha +
-                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * batch_scaled_temporal_alpha * 0.1
+                        torch.mean((body_pose[0:1] - prev_params['body_pose']) ** 2) * self.temporal_alpha +
+                        torch.mean((betas[0:1] - prev_params['betas']) ** 2) * self.temporal_alpha * 0.1
                     )
                 
-                # 2. Intra-batch smoothing (every frame with previous frame in batch)
-                # FIXED: Use scaled alpha so total smoothing = individual processing
+                # 2. Intra-batch smoothing (each frame with previous frame in batch)
+                # FIXED: Same strength as individual processing, no scaling
                 if batch_size > 1:
                     for i in range(1, batch_size):
                         frame_to_frame_loss = (
-                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * batch_scaled_temporal_alpha +
-                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * batch_scaled_temporal_alpha * 0.1
+                            torch.mean((body_pose[i:i+1] - body_pose[i-1:i]) ** 2) * self.temporal_alpha +
+                            torch.mean((betas[i:i+1] - betas[i-1:i]) ** 2) * self.temporal_alpha * 0.1
                         )
                         temporal_loss += frame_to_frame_loss
                 
-                # RESULT: Same total temporal smoothing strength as arm_meshes.pkl individual processing
+                # RESULT: Identical temporal smoothing strength as arm_meshes.pkl individual processing
                 
                 total_loss = joint_loss + pose_reg + shape_reg + temporal_loss
                 
@@ -675,6 +692,13 @@ class HighAccuracySMPLXFitter:
                         'transl': transl.clone(),
                         'betas': betas.clone()
                     }
+                    
+                    # Monitor shape parameter stability during optimization
+                    current_shape_norm = torch.norm(betas).item()
+                    if initial_shape_norm > 0:
+                        shape_drift_ratio = abs(current_shape_norm - initial_shape_norm) / initial_shape_norm
+                        if shape_drift_ratio > 0.5:  # 50% change warning
+                            print(f"    WARNING: Large shape drift detected: {shape_drift_ratio:.1%} change")
         
         # Generate individual mesh results  
         mesh_results = []
@@ -702,14 +726,26 @@ class HighAccuracySMPLXFitter:
                 
                 mesh_results.append(mesh_result)
         
-        # Update temporal history with last frame
+        # Update temporal history with last frame (FIXED: proper single-frame format)
         if batch_size > 0:
-            last_frame_params = {k: v[-1:].clone() for k, v in best_params.items()}
+            # Extract last frame parameters in same format as individual processing
+            last_frame_params = {
+                'body_pose': best_params['body_pose'][-1:].clone().detach(),  # (1, 63)
+                'global_orient': best_params['global_orient'][-1:].clone().detach(),  # (1, 3)
+                'transl': best_params['transl'][-1:].clone().detach(),  # (1, 3)
+                'betas': best_params['betas'][-1:].clone().detach()  # (1, 10)
+            }
             self.param_history.append(last_frame_params)
             if len(self.param_history) > self.max_history:
                 self.param_history.pop(0)
         
         # Keep batch model in cache for reuse (don't delete)
+        
+        # Final shape parameter stability report
+        if len(mesh_results) > 0 and initial_shape_norm > 0:
+            final_shape_norm = torch.norm(best_params['betas'][-1:]).item()
+            total_shape_drift = abs(final_shape_norm - initial_shape_norm) / initial_shape_norm
+            print(f"  Shape stability: {total_shape_drift:.1%} total drift (norm: {initial_shape_norm:.4f} → {final_shape_norm:.4f})")
         
         print(f"  OK Batch fitted {batch_size} meshes, avg error={best_loss:.6f}")
         return mesh_results
