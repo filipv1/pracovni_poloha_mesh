@@ -7,6 +7,7 @@ Designed for maximum accuracy and professional visualization
 
 import os
 import sys
+import time
 import numpy as np
 import cv2
 import torch
@@ -957,11 +958,24 @@ class MasterPipeline:
             print(f"\nART GENERATING OUTPUTS...")
             print("-" * 70)
             
-            # Save mesh data
+            # Save mesh data with metadata
             mesh_file = output_dir / f"{video_path.stem}_meshes.pkl"
+            pkl_data = {
+                'mesh_sequence': mesh_sequence,
+                'metadata': {
+                    'fps': fps,
+                    'total_frames': len(mesh_sequence),
+                    'video_duration_seconds': len(mesh_sequence) / fps,
+                    'frame_skip': frame_skip,
+                    'video_filename': video_path.name,
+                    'processing_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'video_resolution': f"{width}x{height}",
+                    'original_total_frames': total_frames
+                }
+            }
             with open(mesh_file, 'wb') as f:
-                pickle.dump(mesh_sequence, f)
-            print(f"OK Mesh data: {mesh_file}")
+                pickle.dump(pkl_data, f)
+            print(f"OK Mesh data with metadata: {mesh_file}")
             
             # Save statistics
             stats_file = output_dir / f"{video_path.stem}_stats.json"
