@@ -234,7 +234,7 @@ class ErgonomicTimeAnalyzer:
         current_row = 1
         
         # Title
-        ws.merge_cells(f'A{current_row}:C{current_row}')
+        ws.merge_cells(f'A{current_row}:B{current_row}')
         title_cell = ws.cell(row=current_row, column=1, value="ANALÝZA ERGONOMICKÉ ZÁTĚŽE")
         title_cell.font = Font(bold=True, size=16)
         title_cell.alignment = Alignment(horizontal='center')
@@ -243,7 +243,7 @@ class ErgonomicTimeAnalyzer:
         # Video info
         total_time = len(self.df) / self.fps
         info_text = f"Video: {self.csv_file.stem} | Snímky: {len(self.df)} | Trvání: {total_time:.1f}s | FPS: {self.fps}"
-        ws.merge_cells(f'A{current_row}:C{current_row}')
+        ws.merge_cells(f'A{current_row}:B{current_row}')
         info_cell = ws.cell(row=current_row, column=1, value=info_text)
         info_cell.alignment = Alignment(horizontal='center')
         current_row += 3
@@ -258,9 +258,9 @@ class ErgonomicTimeAnalyzer:
                                                 self.results['sustained_times'], section_font, section_fill, border)
         
         # Auto-fit columns
-        for col_num in range(1, 4):  # We now have 3 columns
+        for col_num in range(1, 3):  # We now have 2 columns
             max_length = 0
-            column_letter = chr(64 + col_num)  # A, B, C
+            column_letter = chr(64 + col_num)  # A, B
             for row in ws.iter_rows(min_col=col_num, max_col=col_num):
                 for cell in row:
                     try:
@@ -283,7 +283,7 @@ class ErgonomicTimeAnalyzer:
         current_row = start_row
         
         # Main section title
-        ws.merge_cells(f'A{current_row}:C{current_row}')
+        ws.merge_cells(f'A{current_row}:B{current_row}')
         title_cell = ws.cell(row=current_row, column=1, value=main_title)
         title_cell.font = Font(bold=True, size=14, color="FFFFFF")
         title_cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
@@ -308,15 +308,15 @@ class ErgonomicTimeAnalyzer:
         
         # Body part title
         body_part_display = self.body_part_czech.get(body_part, body_part.replace('_', ' ').title())
-        ws.merge_cells(f'A{current_row}:C{current_row}')
+        ws.merge_cells(f'A{current_row}:B{current_row}')
         subtitle_cell = ws.cell(row=current_row, column=1, value=body_part_display)
         subtitle_cell.font = Font(bold=True, size=12)
         subtitle_cell.fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
         subtitle_cell.alignment = Alignment(horizontal='center')
         current_row += 1
         
-        # Headers (without percentage)
-        headers = ['Rozsah polohy', 'Čas (sekundy)', 'Poznámka']
+        # Headers (only 2 columns)
+        headers = ['Rozsah polohy', 'Čas (sekundy)']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col, value=header)
             cell.font = Font(bold=True)
@@ -332,30 +332,10 @@ class ErgonomicTimeAnalyzer:
             time_cell = ws.cell(row=current_row, column=2, value=f"{seconds:.1f}")
             time_cell.border = border
             time_cell.alignment = Alignment(horizontal='right')
-            # Note based on time and position
-            note = self._get_ergonomic_note(position, seconds)
-            note_cell = ws.cell(row=current_row, column=3, value=note)
-            note_cell.border = border
-            note_cell.alignment = Alignment(horizontal='left')
             
             current_row += 1
         
         return current_row
-    
-    def _get_ergonomic_note(self, position, seconds):
-        """Get ergonomic note based on position and time"""
-        if seconds < 1.0:
-            return "Minimální"
-        elif "silné předkloněni" in position and seconds > 5:
-            return "Rizikové!"
-        elif "silné" in position and seconds > 3:
-            return "Pozor"
-        elif "normální" in position:
-            return "V pořádku"
-        elif seconds > 10:
-            return "Dlouhodobé"
-        else:
-            return "Běžné"
     
     def _add_time_table(self, ws, start_row, title, data, section_font, section_fill, border):
         """Add a time analysis table to worksheet"""
