@@ -234,7 +234,7 @@ class ErgonomicTimeAnalyzer:
         current_row = 1
         
         # Title
-        ws.merge_cells(f'A{current_row}:D{current_row}')
+        ws.merge_cells(f'A{current_row}:C{current_row}')
         title_cell = ws.cell(row=current_row, column=1, value="ANALÝZA ERGONOMICKÉ ZÁTĚŽE")
         title_cell.font = Font(bold=True, size=16)
         title_cell.alignment = Alignment(horizontal='center')
@@ -243,24 +243,24 @@ class ErgonomicTimeAnalyzer:
         # Video info
         total_time = len(self.df) / self.fps
         info_text = f"Video: {self.csv_file.stem} | Snímky: {len(self.df)} | Trvání: {total_time:.1f}s | FPS: {self.fps}"
-        ws.merge_cells(f'A{current_row}:D{current_row}')
+        ws.merge_cells(f'A{current_row}:C{current_row}')
         info_cell = ws.cell(row=current_row, column=1, value=info_text)
         info_cell.alignment = Alignment(horizontal='center')
         current_row += 3
         
-        # 1. Basic time analysis
-        current_row = self._add_time_table(ws, current_row, "CELKOVÝ ČAS V JEDNOTLIVÝCH POLOHÁCH", 
-                                         self.results['basic_times'], section_font, section_fill, border)
+        # 1. Basic time analysis - separate tables for each body part
+        current_row = self._add_body_part_tables(ws, current_row, "CELKOVÝ ČAS V JEDNOTLIVÝCH POLOHÁCH", 
+                                                self.results['basic_times'], section_font, section_fill, border)
         current_row += 2
         
-        # 2. Sustained positions analysis
-        current_row = self._add_time_table(ws, current_row, "DLOUHODOBÉ POLOHY (déle než 4 sekundy)", 
-                                         self.results['sustained_times'], section_font, section_fill, border)
+        # 2. Sustained positions analysis - separate tables for each body part
+        current_row = self._add_body_part_tables(ws, current_row, "DLOUHODOBÉ POLOHY (déle než 4 sekundy)", 
+                                                self.results['sustained_times'], section_font, section_fill, border)
         
         # Auto-fit columns
-        for col_num in range(1, 5):  # We have 4 columns
+        for col_num in range(1, 4):  # We now have 3 columns
             max_length = 0
-            column_letter = chr(64 + col_num)  # A, B, C, D
+            column_letter = chr(64 + col_num)  # A, B, C
             for row in ws.iter_rows(min_col=col_num, max_col=col_num):
                 for cell in row:
                     try:
@@ -277,6 +277,85 @@ class ErgonomicTimeAnalyzer:
         
         print(f"Excel report saved: {output_path}")
         return output_path
+    
+    def _add_body_part_tables(self, ws, start_row, main_title, data, section_font, section_fill, border):
+        """Add separate tables for each body part"""
+        current_row = start_row
+        
+        # Main section title
+        ws.merge_cells(f'A{current_row}:C{current_row}')
+        title_cell = ws.cell(row=current_row, column=1, value=main_title)
+        title_cell.font = Font(bold=True, size=14, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        title_cell.alignment = Alignment(horizontal='center')
+        current_row += 2
+        
+        # Order of body parts
+        body_part_order = ['trunk', 'neck', 'left_arm', 'right_arm']
+        
+        for body_part in body_part_order:
+            if body_part in data:
+                current_row = self._add_single_body_part_table(
+                    ws, current_row, body_part, data[body_part], section_font, section_fill, border
+                )
+                current_row += 1  # Space between tables
+        
+        return current_row
+    
+    def _add_single_body_part_table(self, ws, start_row, body_part, times, section_font, section_fill, border):
+        """Add a table for a single body part"""
+        current_row = start_row
+        
+        # Body part title
+        body_part_display = self.body_part_czech.get(body_part, body_part.replace('_', ' ').title())
+        ws.merge_cells(f'A{current_row}:C{current_row}')
+        subtitle_cell = ws.cell(row=current_row, column=1, value=body_part_display)
+        subtitle_cell.font = Font(bold=True, size=12)
+        subtitle_cell.fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+        subtitle_cell.alignment = Alignment(horizontal='center')
+        current_row += 1
+        
+        # Headers (without percentage)
+        headers = ['Rozsah polohy', 'Čas (sekundy)', 'Poznámka']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=current_row, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.border = border
+            cell.alignment = Alignment(horizontal='center')
+        current_row += 1
+        
+        # Data rows
+        for position, seconds in times.items():
+            # Position
+            ws.cell(row=current_row, column=1, value=position).border = border
+            # Time
+            time_cell = ws.cell(row=current_row, column=2, value=f"{seconds:.1f}")
+            time_cell.border = border
+            time_cell.alignment = Alignment(horizontal='right')
+            # Note based on time and position
+            note = self._get_ergonomic_note(position, seconds)
+            note_cell = ws.cell(row=current_row, column=3, value=note)
+            note_cell.border = border
+            note_cell.alignment = Alignment(horizontal='left')
+            
+            current_row += 1
+        
+        return current_row
+    
+    def _get_ergonomic_note(self, position, seconds):
+        """Get ergonomic note based on position and time"""
+        if seconds < 1.0:
+            return "Minimální"
+        elif "silné předkloněni" in position and seconds > 5:
+            return "Rizikové!"
+        elif "silné" in position and seconds > 3:
+            return "Pozor"
+        elif "normální" in position:
+            return "V pořádku"
+        elif seconds > 10:
+            return "Dlouhodobé"
+        else:
+            return "Běžné"
     
     def _add_time_table(self, ws, start_row, title, data, section_font, section_fill, border):
         """Add a time analysis table to worksheet"""
