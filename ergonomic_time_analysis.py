@@ -156,6 +156,13 @@ class ErgonomicTimeAnalyzer:
             'right_arm': self._count_category_time('right_arm_category', frame_duration)
         }
         
+        # Debug: Show angle ranges in data
+        print(f"\nDEBUG - Angle ranges in data:")
+        print(f"Trunk angles: min={self.df['trunk_angle_skin'].min():.1f}°, max={self.df['trunk_angle_skin'].max():.1f}°")
+        print(f"Neck angles: min={self.df['neck_angle_skin'].min():.1f}°, max={self.df['neck_angle_skin'].max():.1f}°")  
+        print(f"Left arm angles: min={self.df['left_arm_angle'].min():.1f}°, max={self.df['left_arm_angle'].max():.1f}°")
+        print(f"Right arm angles: min={self.df['right_arm_angle'].min():.1f}°, max={self.df['right_arm_angle'].max():.1f}°")
+        
         # Print summary
         print("\nBASIC TIME ANALYSIS:")
         for body_part, times in self.results['basic_times'].items():
