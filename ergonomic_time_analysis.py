@@ -171,9 +171,25 @@ class ErgonomicTimeAnalyzer:
                 print(f"  {category}: {seconds:.1f}s")
     
     def _count_category_time(self, column, frame_duration):
-        """Count time spent in each category"""
+        """Count time spent in each category - include all defined categories"""
         category_counts = self.df[column].value_counts()
-        return {category: count * frame_duration for category, count in category_counts.items()}
+        
+        # Get all possible categories for this body part
+        if 'trunk' in column:
+            all_categories = [label for label, _ in self.angle_ranges['trunk'].values()]
+        elif 'neck' in column:
+            all_categories = [label for label, _ in self.angle_ranges['neck'].values()]
+        elif 'arm' in column:
+            all_categories = [label for label, _ in self.angle_ranges['arm'].values()]
+        else:
+            all_categories = []
+        
+        # Create result with all categories, defaulting to 0
+        result = {}
+        for category in all_categories:
+            result[category] = category_counts.get(category, 0) * frame_duration
+            
+        return result
     
     def calculate_sustained_positions(self, min_duration=4.0):
         """Calculate time spent in sustained positions (>4 seconds)"""
@@ -197,9 +213,20 @@ class ErgonomicTimeAnalyzer:
     
     def _find_sustained_periods(self, column, min_frames):
         """Find periods where same category lasts for minimum frames"""
-        sustained_times = {}
+        # Get all possible categories for this body part
+        if 'trunk' in column:
+            all_categories = [label for label, _ in self.angle_ranges['trunk'].values()]
+        elif 'neck' in column:
+            all_categories = [label for label, _ in self.angle_ranges['neck'].values()]
+        elif 'arm' in column:
+            all_categories = [label for label, _ in self.angle_ranges['arm'].values()]
+        else:
+            all_categories = []
         
-        # Get unique categories
+        # Initialize all categories with 0
+        sustained_times = {category: 0.0 for category in all_categories}
+        
+        # Get unique categories that actually appear in data
         categories = self.df[column].unique()
         
         for category in categories:
