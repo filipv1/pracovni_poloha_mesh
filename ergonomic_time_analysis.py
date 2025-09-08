@@ -250,15 +250,16 @@ class ErgonomicTimeAnalyzer:
                                          self.results['sustained_times'], section_font, section_fill, border)
         
         # Auto-fit columns
-        for column in ws.columns:
+        for col_num in range(1, 5):  # We have 4 columns
             max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
+            column_letter = chr(64 + col_num)  # A, B, C, D
+            for row in ws.iter_rows(min_col=col_num, max_col=col_num):
+                for cell in row:
+                    try:
+                        if cell.value and len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
         
