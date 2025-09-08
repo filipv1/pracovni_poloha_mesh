@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import pickle
 from pathlib import Path
+import cv2
+import json
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -22,7 +24,61 @@ CERVICAL_SKIN_VERTEX = 2151  # Neck area on skin
 LUMBAR_SKIN_VERTEX_1 = 5614  # Lower back option 1
 LUMBAR_SKIN_VERTEX_2 = 4298  # Lower back option 2
 
-def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.csv", lumbar_vertex=5614):
+def detect_video_fps(video_path):
+    """
+    Detect FPS of the original video file
+    
+    Args:
+        video_path: Path to video file
+        
+    Returns:
+        fps: Video framerate, or 30.0 as fallback
+    """
+    try:
+        cap = cv2.VideoCapture(str(video_path))
+        if cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+            if fps > 0:
+                print(f"  Detected video FPS: {fps:.2f}")
+                return fps
+    except Exception as e:
+        print(f"  Warning: Could not detect FPS from video: {e}")
+    
+    print(f"  Using default FPS: 30.0")
+    return 30.0
+
+def find_original_video(pkl_file):
+    """
+    Try to find the original video file based on PKL filename
+    
+    Args:
+        pkl_file: PKL file path
+        
+    Returns:
+        video_path: Path to video file or None
+    """
+    pkl_path = Path(pkl_file)
+    video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
+    
+    # Try same name with video extensions
+    for ext in video_extensions:
+        video_path = pkl_path.parent / (pkl_path.stem.replace('_meshes', '').replace('_filtered', '') + ext)
+        if video_path.exists():
+            print(f"  Found original video: {video_path}")
+            return video_path
+    
+    # Look for any video files in same directory
+    for ext in video_extensions:
+        video_files = list(pkl_path.parent.glob(f'*{ext}'))
+        if video_files:
+            print(f"  Found video file: {video_files[0]}")
+            return video_files[0]
+    
+    print(f"  No original video found for FPS detection")
+    return None
+
+def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.csv", lumbar_vertex=5614, video_path=None):
     """
     Create CSV with all angles, using SKIN vertices for trunk
     
@@ -30,9 +86,12 @@ def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.c
         pkl_file: Input PKL file with mesh data
         output_csv: Output CSV filename
         lumbar_vertex: Which lumbar vertex to use (5614 or 4298)
+        video_path: Optional path to original video for FPS detection
     
     Output columns:
     - frame: Frame number (0-based)
+    - time_seconds: Time in seconds (frame / fps)
+    - fps: Video framerate
     - trunk_angle_skin: Trunk angle from SKIN vertices in degrees
     - trunk_angle_joints: Original trunk angle from joints (for comparison)
     - neck_angle_skin: Neck angle from SKIN vertices in degrees
@@ -47,7 +106,7 @@ def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.c
     print(f"  TRUNK: Lumbar {lumbar_vertex} → Cervical {CERVICAL_SKIN_VERTEX}")
     print(f"  NECK: Cervical {CERVICAL_SKIN_VERTEX} → Head 9002")
     
-    # Load PKL data
+    # Load PKL data first to get FPS from metadata
     pkl_path = Path(pkl_file)
     if not pkl_path.exists():
         print(f"ERROR: PKL file not found: {pkl_file}")
@@ -55,7 +114,35 @@ def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.c
     
     print(f"\nLoading PKL file: {pkl_path}")
     with open(pkl_path, 'rb') as f:
-        meshes = pickle.load(f)
+        pkl_data = pickle.load(f)
+    
+    # Handle both old and new PKL format
+    if isinstance(pkl_data, dict) and 'mesh_sequence' in pkl_data:
+        # New format with metadata
+        meshes = pkl_data['mesh_sequence']
+        metadata = pkl_data.get('metadata', {})
+        fps = metadata.get('fps', 30.0)
+        print(f"  FPS from PKL metadata: {fps:.2f}")
+        if 'video_filename' in metadata:
+            print(f"  Original video: {metadata['video_filename']}")
+        if 'frame_skip' in metadata:
+            print(f"  Frame skip: {metadata['frame_skip']}")
+    else:
+        # Old format - just mesh sequence
+        meshes = pkl_data
+        fps = 30.0  # Default fallback
+        print(f"  Old PKL format detected")
+        
+        # Try to detect FPS from video as fallback
+        if video_path and Path(video_path).exists():
+            fps = detect_video_fps(video_path)
+        else:
+            # Try to find original video
+            found_video = find_original_video(pkl_file)
+            if found_video:
+                fps = detect_video_fps(found_video)
+        
+        print(f"  Using FPS: {fps:.2f}")
     
     print(f"Loaded {len(meshes)} frames")
     
@@ -82,6 +169,8 @@ def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.c
         
         result = {
             'frame': frame_idx,
+            'time_seconds': frame_idx / fps,
+            'fps': fps,
             'trunk_angle_skin': 0.0,
             'trunk_angle_joints': 0.0,
             'neck_angle_skin': 0.0,
@@ -169,6 +258,11 @@ def create_combined_angles_csv_skin(pkl_file, output_csv="combined_angles_skin.c
     print(f"Columns: {list(df.columns)}")
     
     # Show statistics
+    print(f"\nVIDEO INFORMATION:")
+    print(f"Total frames: {len(df)}")
+    print(f"Video FPS: {fps:.2f}")
+    print(f"Total duration: {len(df)/fps:.1f} seconds")
+    
     print(f"\nANGLE STATISTICS:")
     print(f"Trunk (SKIN):    {df['trunk_angle_skin'].mean():6.1f}° ± {df['trunk_angle_skin'].std():5.1f}° "
           f"(range: {df['trunk_angle_skin'].min():6.1f}° to {df['trunk_angle_skin'].max():6.1f}°)")

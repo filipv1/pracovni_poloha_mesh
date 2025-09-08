@@ -14,6 +14,9 @@ python quick_test_3_frames.py
 
 # For trunk analysis (2D pose detection)
 python pracovni_poloha2/main.py input.mp4 output.mp4
+
+# Simple production run
+python run_production_simple.py
 ```
 
 ### Testing Commands
@@ -46,6 +49,24 @@ python create_combined_angles_csv.py fil_vid_meshes.pkl combined_angles.csv
 python neck_angle_calculator_like_arm.py
 ```
 
+### Skin-based Analysis Commands (NEW)
+```bash
+# Skin-based trunk angle calculation
+python trunk_angle_calculator_skin.py
+
+# Skin-based neck angle calculation
+python neck_angle_calculator_skin.py
+
+# Combined skin-based angles CSV
+python create_combined_angles_csv_skin.py fil_vid_meshes.pkl skin_angles.csv
+
+# Export all vectors with skin vertices to Blender
+python export_all_vectors_skin_to_blender.py
+
+# Blender skin vectors animation
+python blender_skin_vectors_animation.py
+```
+
 ### RunPod Deployment
 ```bash
 # Automated GPU setup for RunPod
@@ -57,10 +78,11 @@ python setup_runpod_conda.py
 
 ## Architecture Overview
 
-This repository contains three main systems:
+This repository contains four main systems:
 
 ### 1. 3D Human Mesh Pipeline (Production)
 - **Entry Point**: `production_3d_pipeline_clean.py` (main pipeline)
+- **Simple Runner**: `run_production_simple.py` (simplified execution)
 - **Technology**: SMPL-X + MediaPipe + Open3D + PyTorch
 - **Purpose**: Convert MediaPipe 33 3D landmarks → SMPL-X 3D human mesh → Professional visualization
 - **Output**: 3D mesh animations, high-quality renders, mesh data export
@@ -83,7 +105,7 @@ This repository contains three main systems:
 - `TrunkAngleCalculator` - Angle computation and analysis
 - `SkeletonVisualizer` - Video overlay visualization
 
-### 3. Advanced Angle Analysis System (NEW)
+### 3. Advanced Angle Analysis System (Joint-based)
 - **Bilateral Arm Angles**: `arm_angle_calculator.py` - Robust anatomical angle calculation
 - **Neck Angles**: `neck_angle_calculator_like_arm.py` - Stable neck angle using arm algorithm
 - **Combined Export**: `create_combined_angles_csv.py` - Simple CSV with all angles
@@ -94,6 +116,19 @@ This repository contains three main systems:
 - Handles all body orientations robustly
 - Sagittal and frontal plane measurements
 - Frame-stable calculations with confidence scoring
+
+### 4. Skin-based Analysis System (NEW)
+- **Purpose**: Calculate angles using actual skin vertices instead of internal joints
+- **Trunk Angles**: `trunk_angle_calculator_skin.py` - Uses surface vertices for trunk
+- **Neck Angles**: `neck_angle_calculator_skin.py` - Uses head and neck skin vertices
+- **Combined Export**: `create_combined_angles_csv_skin.py` - All skin-based angles
+- **Blender Export**: `export_all_vectors_skin_to_blender.py` - Visualize vectors in Blender
+
+**Key Advantages:**
+- More accurate representation of visible body posture
+- Better correlation with visual appearance
+- Includes skin deformation effects
+- Enhanced visualization capabilities
 
 ## Dependencies
 
@@ -127,9 +162,14 @@ Input Video → MediaPipe (33 3D landmarks) → SMPL-X Fitting → Open3D Render
 Input Video → MediaPipe (33 2D landmarks) → Angle Calculation → Visualization → Output
 ```
 
-### 3D Angle Analysis
+### 3D Angle Analysis (Joint-based)
 ```
 PKL Mesh Data → Joint Extraction → Anatomical Coordinate System → Multi-angle Calculation → CSV/OBJ Export
+```
+
+### 3D Angle Analysis (Skin-based)
+```
+PKL Mesh Data → Skin Vertex Selection → Vector Calculation → Angle Computation → CSV/Blender Export
 ```
 
 ## Performance Characteristics
@@ -170,7 +210,7 @@ processor = TrunkAnalysisProcessor(
 )
 ```
 
-### Angle Analysis (3D Pipeline)
+### Joint-based Angle Analysis (3D Pipeline)
 ```python
 # Trunk angles
 from trunk_angle_calculator import TrunkAngleCalculator
@@ -189,6 +229,23 @@ left_angle = result['left_arm']['sagittal_angle']  # 0°=hanging, +90°=forward,
 right_angle = result['right_arm']['sagittal_angle']
 ```
 
+### Skin-based Angle Analysis (3D Pipeline)
+```python
+# Skin-based trunk angles
+from trunk_angle_calculator_skin import TrunkAngleCalculatorSkin
+calculator = TrunkAngleCalculatorSkin()
+angles_data = calculator.calculate_angles_from_pkl('meshes.pkl')
+
+# Skin-based neck angles
+from neck_angle_calculator_skin import NeckAngleCalculatorSkin
+calculator = NeckAngleCalculatorSkin()
+angles_data = calculator.calculate_angles_from_pkl('meshes.pkl')
+
+# Combined skin-based angles
+from create_combined_angles_csv_skin import create_combined_angles_csv_skin
+create_combined_angles_csv_skin('meshes.pkl', 'skin_angles.csv')
+```
+
 ### Export and Analysis Tools
 ```bash
 # Calculate trunk angles from existing mesh data
@@ -200,17 +257,30 @@ python create_combined_angles_csv.py fil_vid_meshes.pkl
 # Export to Blender with enhanced visualization
 python export_trunk_vectors_with_angle_to_blender.py
 python export_to_blender.py
+python export_all_vectors_to_blender.py  # All vectors (joint-based)
+python export_all_vectors_skin_to_blender.py  # All vectors (skin-based)
 
 # Blender import scripts in blender_export/:
 # - side_by_side_arm_and_trunk_sequence.py
 # - combined_mesh_and_trunk_sequence.py
 # - trunk_vector_sequence.py
 
+# Blender animation scripts:
+# - blender_fixed_animation.py  # Fixed animation with shape consistency
+# - blender_skin_vectors_animation.py  # Skin-based vector animation
+# - blender_ultra_fast_animation.py  # Optimized fast animation
+
 # Interactive 3D visualization
 python interactive_3d_viewer.py
 
 # Analyze frame skip performance
 python analyze_frame_skip.py
+
+# Show PKL data structure
+python show_pkl_data.py
+
+# Repair SMPL-X joints if needed
+python repair_smplx_joints.py
 ```
 
 ### Data Export Capabilities
@@ -218,7 +288,7 @@ The pipeline supports multiple export formats:
 - **PKL files**: Complete mesh sequence data (`*_meshes.pkl`)
 - **OBJ sequences**: Individual frame meshes (`trunk_analysis_export/trunk_analysis_XXXX.obj`)
 - **Blender integration**: Direct export to Blender format with animation
-- **CSV data**: Angle measurements and statistics
+- **CSV data**: Angle measurements and statistics (joint-based and skin-based)
 - **Visualization**: Professional 3D renders and animations
 
 ## Important Notes
@@ -231,6 +301,7 @@ The pipeline supports multiple export formats:
 - Large OBJ export sequences (400+ files) are generated in `trunk_analysis_export/` directory
 - Trunk angle statistics are saved as `trunk_angle_statistics.txt`
 - Combined angle data (trunk+neck+arms) exported as CSV for analysis
+- Skin-based analysis provides more visually accurate angle measurements
 
 ## SMPL-X Joint Indices Reference
 Key joints used in calculations:
@@ -244,3 +315,9 @@ Key joints used in calculations:
 - 17: left_shoulder
 - 18: right_elbow
 - 19: left_elbow
+
+## Blender Integration Notes
+- Blender scripts require Blender 3.0+ with Python API
+- Animation scripts handle both joint-based and skin-based visualizations
+- Use `blender_ultra_fast_animation.py` for large datasets (optimized performance)
+- Shape consistency maintained across all frames in newer scripts (`blender_fixed_animation.py`)
