@@ -29,26 +29,34 @@ class ErgonomicTimeAnalyzer:
         self.df = None
         self.results = {}
         
-        # Define angle ranges for different body parts
+        # Define angle ranges for different body parts - CZECH LABELS
         self.angle_ranges = {
             'trunk': {
-                'extreme_backward': ('≤-15°', lambda x: x <= -15),
-                'normal_backward': ('-15° to 40°', lambda x: -15 < x <= 40),
-                'moderate_forward': ('40° to 60°', lambda x: 40 < x <= 60),
-                'extreme_forward': ('≥60°', lambda x: x > 60)
+                'extreme_backward': ('≤-15° (silné zakloněni)', lambda x: x <= -15),
+                'normal_backward': ('-15° až 40° (normální)', lambda x: -15 < x <= 40),
+                'moderate_forward': ('40° až 60° (mírné předkloněni)', lambda x: 40 < x <= 60),
+                'extreme_forward': ('≥60° (silné předkloněni)', lambda x: x > 60)
             },
             'neck': {
-                'extreme_backward': ('≤-15°', lambda x: x <= -15),
-                'normal': ('-15° to 25°', lambda x: -15 < x <= 25),
-                'moderate_forward': ('25° to 60°', lambda x: 25 < x <= 60),
-                'extreme_forward': ('≥60°', lambda x: x > 60)
+                'extreme_backward': ('≤-15° (silné zakloněni)', lambda x: x <= -15),
+                'normal': ('-15° až 25° (normální)', lambda x: -15 < x <= 25),
+                'moderate_forward': ('25° až 60° (mírné předkloněni)', lambda x: 25 < x <= 60),
+                'extreme_forward': ('≥60° (silné předkloněni)', lambda x: x > 60)
             },
             'arm': {
-                'backward': ('<0°', lambda x: x < 0),
-                'normal': ('0° to 40°', lambda x: 0 <= x <= 40),
-                'moderate_elevation': ('40° to 60°', lambda x: 40 < x <= 60),
-                'extreme_elevation': ('≥60°', lambda x: x > 60)
+                'backward': ('<0° (za tělem)', lambda x: x < 0),
+                'normal': ('0° až 40° (normální)', lambda x: 0 <= x <= 40),
+                'moderate_elevation': ('40° až 60° (mírné zvednutí)', lambda x: 40 < x <= 60),
+                'extreme_elevation': ('≥60° (silné zvednutí)', lambda x: x > 60)
             }
+        }
+        
+        # Czech body part names for display
+        self.body_part_czech = {
+            'trunk': 'Trup',
+            'neck': 'Krk', 
+            'left_arm': 'Levá paže',
+            'right_arm': 'Pravá paže'
         }
     
     def load_data(self):
@@ -227,26 +235,26 @@ class ErgonomicTimeAnalyzer:
         
         # Title
         ws.merge_cells(f'A{current_row}:D{current_row}')
-        title_cell = ws.cell(row=current_row, column=1, value="ERGONOMIC TIME ANALYSIS REPORT")
+        title_cell = ws.cell(row=current_row, column=1, value="ANALÝZA ERGONOMICKÉ ZÁTĚŽE")
         title_cell.font = Font(bold=True, size=16)
         title_cell.alignment = Alignment(horizontal='center')
         current_row += 2
         
         # Video info
         total_time = len(self.df) / self.fps
-        info_text = f"Video: {self.csv_file.stem} | Frames: {len(self.df)} | Duration: {total_time:.1f}s | FPS: {self.fps}"
+        info_text = f"Video: {self.csv_file.stem} | Snímky: {len(self.df)} | Trvání: {total_time:.1f}s | FPS: {self.fps}"
         ws.merge_cells(f'A{current_row}:D{current_row}')
         info_cell = ws.cell(row=current_row, column=1, value=info_text)
         info_cell.alignment = Alignment(horizontal='center')
         current_row += 3
         
         # 1. Basic time analysis
-        current_row = self._add_time_table(ws, current_row, "BASIC TIME ANALYSIS", 
+        current_row = self._add_time_table(ws, current_row, "CELKOVÝ ČAS V JEDNOTLIVÝCH POLOHÁCH", 
                                          self.results['basic_times'], section_font, section_fill, border)
         current_row += 2
         
         # 2. Sustained positions analysis
-        current_row = self._add_time_table(ws, current_row, "SUSTAINED POSITIONS (>4 seconds)", 
+        current_row = self._add_time_table(ws, current_row, "DLOUHODOBÉ POLOHY (déle než 4 sekundy)", 
                                          self.results['sustained_times'], section_font, section_fill, border)
         
         # Auto-fit columns
@@ -283,7 +291,7 @@ class ErgonomicTimeAnalyzer:
         current_row += 1
         
         # Headers
-        headers = ['Body Part', 'Position Range', 'Time (seconds)', 'Percentage']
+        headers = ['Část těla', 'Rozsah polohy', 'Čas (sekundy)', 'Procenta']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=current_row, column=col, value=header)
             cell.font = Font(bold=True)
@@ -296,7 +304,8 @@ class ErgonomicTimeAnalyzer:
         
         # Data rows
         for body_part, times in data.items():
-            body_part_display = body_part.replace('_', ' ').title()
+            # Use Czech body part name
+            body_part_display = self.body_part_czech.get(body_part, body_part.replace('_', ' ').title())
             
             for position, seconds in times.items():
                 percentage = (seconds / total_time) * 100
@@ -318,9 +327,9 @@ class ErgonomicTimeAnalyzer:
         
         return current_row
     
-    def run_analysis(self, output_excel="ergonomic_analysis.xlsx"):
+    def run_analysis(self, output_excel="ergonomicka_analyza.xlsx"):
         """Run complete analysis"""
-        print("ERGONOMIC TIME ANALYSIS")
+        print("ANALÝZA ERGONOMICKÉ ZÁTĚŽE")
         print("=" * 50)
         
         try:
@@ -330,15 +339,15 @@ class ErgonomicTimeAnalyzer:
             self.calculate_sustained_positions(min_duration=4.0)
             excel_path = self.export_to_excel(output_excel)
             
-            print(f"\n✅ ANALYSIS COMPLETED SUCCESSFULLY")
+            print(f"\n✅ ANALÝZA ÚSPĚŠNĚ DOKONČENA")
             print(f"📊 Excel report: {excel_path}")
-            print(f"📈 Total video duration: {len(self.df)/self.fps:.1f} seconds")
-            print(f"🎬 Video FPS: {self.fps:.2f}")
+            print(f"📈 Celková délka videa: {len(self.df)/self.fps:.1f} sekund")
+            print(f"🎬 FPS videa: {self.fps:.2f}")
             
             return excel_path
             
         except Exception as e:
-            print(f"❌ ERROR: {e}")
+            print(f"❌ CHYBA: {e}")
             return None
 
 def main():
@@ -369,20 +378,20 @@ def main():
     
     # Create output filename
     input_path = Path(input_csv)
-    output_excel = f"ergonomic_analysis_{input_path.stem}.xlsx"
+    output_excel = f"ergonomicka_analyza_{input_path.stem}.xlsx"
     
     # Run analysis
     analyzer = ErgonomicTimeAnalyzer(input_csv)
     result = analyzer.run_analysis(output_excel)
     
     if result:
-        print(f"\n🎯 READY FOR REVIEW:")
-        print(f"Open {result} to see detailed ergonomic analysis")
-        print(f"\nAnalysis includes:")
-        print(f"• Time spent in each angle range")
-        print(f"• Sustained position analysis (>4 seconds)")
-        print(f"• Percentage breakdowns")
-        print(f"• Formatted tables for easy interpretation")
+        print(f"\n🎯 PŘIPRAVENO K PROHLÉDNUTÍ:")
+        print(f"Otevřete {result} pro detailní ergonomickou analýzu")
+        print(f"\nAnalýza obsahuje:")
+        print(f"• Čas strávený v jednotlivých úhlových rozsazích")
+        print(f"• Analýzu dlouhodobých poloh (>4 sekundy)")
+        print(f"• Procentuální rozdělení")
+        print(f"• Přehledné tabulky pro snadnou interpretaci")
 
 if __name__ == "__main__":
     main()
