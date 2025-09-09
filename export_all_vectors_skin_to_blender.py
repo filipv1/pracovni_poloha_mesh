@@ -148,7 +148,22 @@ def export_all_vectors_skin_to_blender(pkl_file, output_dir="blender_export_skin
     
     print(f"Loading: {pkl_path}")
     with open(pkl_path, 'rb') as f:
-        meshes = pickle.load(f)
+        pkl_data = pickle.load(f)
+    
+    # Handle both old and new PKL format
+    if isinstance(pkl_data, dict) and 'mesh_sequence' in pkl_data:
+        # New format with metadata
+        meshes = pkl_data['mesh_sequence']
+        metadata = pkl_data.get('metadata', {})
+        print(f"  New PKL format detected with metadata")
+        if 'fps' in metadata:
+            print(f"  FPS from PKL: {metadata['fps']:.2f}")
+        if 'video_filename' in metadata:
+            print(f"  Original video: {metadata['video_filename']}")
+    else:
+        # Old format - just mesh sequence
+        meshes = pkl_data
+        print(f"  Old PKL format detected")
     
     print(f"Loaded {len(meshes)} frames")
     
@@ -261,7 +276,7 @@ def export_all_vectors_skin_to_blender(pkl_file, output_dir="blender_export_skin
 
 def main():
     """Main execution with vertex choice"""
-    pkl_file = "arm_meshes.pkl"
+    pkl_file = "fpsmeshes.pkl"
     
     if not Path(pkl_file).exists():
         print(f"ERROR: PKL file not found: {pkl_file}")
