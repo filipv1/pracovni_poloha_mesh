@@ -15,7 +15,7 @@ bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
 
 # Set base directory
-base_dir = Path(r"C:\Users\vaclavik\ruce4\pracovni_poloha_mesh\blender_export_all")
+base_dir = Path(r"C:\Users\vaclavik\ruce4\pracovni_poloha_mesh\blender_export_skin_5614")
 
 if not base_dir.exists():
     print(f"ERROR: Directory not found: {base_dir}")
@@ -35,10 +35,14 @@ else:
         frames_data[frame_idx] = []
         
         # List of files to import for this frame
+        # Support both regular and skin-based naming conventions
         files_to_import = [
             (f"frame_{frame_idx:04d}.obj", "Mesh", (0.8, 0.8, 0.8, 1.0)),
             (f"trunk_{frame_idx:04d}.obj", "Trunk", (1.0, 0.2, 0.2, 1.0)),
+            (f"trunk_skin_{frame_idx:04d}.obj", "TrunkSkin", (1.0, 0.2, 0.2, 1.0)),  # Skin-based trunk
             (f"neck_{frame_idx:04d}.obj", "Neck", (0.2, 0.2, 1.0, 1.0)),
+            (f"neck_skin_{frame_idx:04d}.obj", "NeckSkin", (0.2, 0.2, 1.0, 1.0)),  # Skin-based neck
+            (f"head_{frame_idx:04d}.obj", "Head", (0.5, 0.2, 1.0, 1.0)),  # Head vector
             (f"left_arm_{frame_idx:04d}.obj", "LeftArm", (0.2, 1.0, 0.2, 1.0)),
             (f"right_arm_{frame_idx:04d}.obj", "RightArm", (1.0, 1.0, 0.2, 1.0))
         ]
@@ -174,8 +178,9 @@ else:
     print(f"Total frames: {num_frames}")
     print(f"Total objects: {sum(len(objs) for objs in frames_data.values())}")
     print("\nVECTOR COLORS:")
-    print("- RED: Trunk vector")
-    print("- BLUE: Neck vector")
+    print("- RED: Trunk vector (joint-based or skin-based)")
+    print("- BLUE: Neck vector (joint-based or skin-based)")
+    print("- PURPLE: Head vector (if available)")
     print("- GREEN: Left arm")
     print("- YELLOW: Right arm")
     print("\nCONTROLS:")
