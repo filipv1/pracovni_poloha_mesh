@@ -211,8 +211,13 @@ def setup_render_settings(output_path, fps, resolution_x, resolution_y, samples)
     
     scene = bpy.context.scene
     
-    # Output settings
-    scene.render.filepath = output_path
+    # Output settings - ensure no frame numbers are added
+    # Remove extension if present and add it back properly
+    output_base = str(output_path)
+    if output_base.endswith('.mp4'):
+        output_base = output_base[:-4]
+    
+    scene.render.filepath = output_base  # Blender will add extension
     scene.render.image_settings.file_format = 'FFMPEG'
     
     # Video codec settings
@@ -230,15 +235,16 @@ def setup_render_settings(output_path, fps, resolution_x, resolution_y, samples)
     scene.render.fps = fps
     scene.render.fps_base = 1.0
     
-    # Render engine settings
-    scene.render.engine = 'BLENDER_EEVEE'  # Faster than Cycles
+    # Render engine settings (Blender 4.5 uses EEVEE_NEXT)
+    scene.render.engine = 'BLENDER_EEVEE_NEXT'  # Faster than Cycles
     scene.eevee.taa_render_samples = samples
     scene.eevee.use_motion_blur = False  # Disable for clarity
     
     # Transparency for compositing
     scene.render.film_transparent = False
     
-    print(f"  Output: {output_path}")
+    print(f"  Output base: {output_base}")
+    print(f"  Full path: {scene.render.filepath}")
     print(f"  Resolution: {resolution_x}x{resolution_y}")
     print(f"  FPS: {fps}")
     print(f"  Samples: {samples}")

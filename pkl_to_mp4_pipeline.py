@@ -30,60 +30,55 @@ def load_pkl_metadata(pkl_path):
         meshes = pkl_data['mesh_sequence']
         metadata = pkl_data.get('metadata', {})
         fps = metadata.get('fps', 30.0)
-        print(f"  ✓ New PKL format with metadata")
-        print(f"  ✓ FPS: {fps}")
-        print(f"  ✓ Frames: {len(meshes)}")
+        print(f"  [OK] New PKL format with metadata")
+        print(f"  [OK] FPS: {fps}")
+        print(f"  [OK] Frames: {len(meshes)}")
     else:
         meshes = pkl_data
         fps = 30.0
-        print(f"  ✓ Old PKL format")
-        print(f"  ✓ Using default FPS: {fps}")
-        print(f"  ✓ Frames: {len(meshes)}")
+        print(f"  [OK] Old PKL format")
+        print(f"  [OK] Using default FPS: {fps}")
+        print(f"  [OK] Frames: {len(meshes)}")
     
     return len(meshes), fps
 
 def export_obj_sequences(pkl_path, output_dir="blender_export_skin_5614"):
     """Export OBJ sequences from PKL using existing script"""
     print(f"[2/4] Exporting OBJ sequences...")
+    print(f"  • This may take 1-2 minutes for 500 frames...")
+    print(f"  • Exporting to: {output_dir}/")
     
-    # Use the existing export script
-    cmd = [
-        sys.executable,
-        "export_all_vectors_skin_to_blender.py"
-    ]
-    
-    # Simulate user input for vertex choice (default = 1 for vertex 5614)
+    # Call the export function directly instead of subprocess
     try:
-        result = subprocess.run(
-            cmd,
-            input="1\n",  # Choose vertex 5614
-            text=True,
-            capture_output=True,
-            timeout=300  # 5 minutes timeout
+        # Import the export function
+        from export_all_vectors_skin_to_blender import export_all_vectors_skin_to_blender
+        
+        # Call it directly with parameters
+        result_dir = export_all_vectors_skin_to_blender(
+            pkl_file=str(pkl_path),
+            output_dir=output_dir,
+            lumbar_vertex=5614  # Default vertex
         )
         
-        if result.returncode != 0:
-            print(f"  ✗ Export failed: {result.stderr}")
+        if not result_dir:
+            print(f"  [ERROR] Export failed")
             return False
             
-        print(f"  ✓ OBJ files exported to {output_dir}/")
+        print(f"  [OK] OBJ files exported to {output_dir}/")
         
         # Verify export
         export_path = Path(output_dir)
         if not export_path.exists():
-            print(f"  ✗ Export directory not found: {export_path}")
+            print(f"  [ERROR] Export directory not found: {export_path}")
             return False
             
         obj_files = list(export_path.glob("*.obj"))
-        print(f"  ✓ Found {len(obj_files)} OBJ files")
+        print(f"  [OK] Found {len(obj_files)} OBJ files")
         
         return True
         
-    except subprocess.TimeoutExpired:
-        print(f"  ✗ Export timeout after 5 minutes")
-        return False
     except Exception as e:
-        print(f"  ✗ Export error: {e}")
+        print(f"  [ERROR] Export error: {e}")
         return False
 
 def render_in_blender(obj_dir, output_mp4, fps, quality="medium"):
@@ -105,23 +100,54 @@ def render_in_blender(obj_dir, output_mp4, fps, quality="medium"):
     # Check if Blender is available
     blender_exe = shutil.which("blender")
     if not blender_exe:
-        # Try common Windows paths
+        # Try common Windows paths (including user installations)
         common_paths = [
+            # Program Files locations
+            r"C:\Program Files\Blender Foundation\Blender 4.2\blender.exe",
+            r"C:\Program Files\Blender Foundation\Blender 4.1\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender 4.0\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender 3.6\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender 3.5\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender 3.4\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender 3.3\blender.exe",
             r"C:\Program Files\Blender Foundation\Blender\blender.exe",
+            # User installations
+            Path.home() / "Downloads" / "blender-4.2.0-windows-x64" / "blender.exe",
+            Path.home() / "Downloads" / "blender-4.1.0-windows-x64" / "blender.exe",
+            Path.home() / "Downloads" / "blender-4.0.0-windows-x64" / "blender.exe",
+            Path.home() / "Desktop" / "Blender" / "blender.exe",
+            # Portable installations
+            r"D:\Blender\blender.exe",
+            r"E:\Blender\blender.exe",
+            r"C:\Blender\blender.exe",
+            # Steam installation
+            r"C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe",
         ]
         for path in common_paths:
-            if Path(path).exists():
-                blender_exe = path
+            if isinstance(path, str):
+                path = Path(path)
+            if path.exists():
+                blender_exe = str(path)
                 break
     
     if not blender_exe:
-        print(f"  ✗ Blender not found. Please install Blender or add it to PATH")
-        return False
+        print(f"  [ERROR] Blender not found in common locations")
+        print(f"  • Download Blender from: https://www.blender.org/download/")
+        print(f"  • Or set BLENDER_PATH environment variable")
+        print(f"  • Or create blender_path.txt with path to blender.exe")
+        
+        # Check for custom path file
+        custom_path_file = Path("blender_path.txt")
+        if custom_path_file.exists():
+            custom_path = custom_path_file.read_text().strip()
+            if Path(custom_path).exists():
+                blender_exe = custom_path
+                print(f"  [OK] Found Blender from blender_path.txt: {blender_exe}")
+            else:
+                print(f"  [ERROR] Invalid path in blender_path.txt: {custom_path}")
+                return False
+        else:
+            return False
     
     print(f"  • Using Blender: {blender_exe}")
     
@@ -154,27 +180,61 @@ def render_in_blender(obj_dir, output_mp4, fps, quality="medium"):
         elapsed = time.time() - start_time
         
         if result.returncode != 0:
-            print(f"  ✗ Render failed after {elapsed:.1f}s")
-            print(f"  Error: {result.stderr}")
+            print(f"  [ERROR] Render failed after {elapsed:.1f}s")
+            if result.stderr:
+                print(f"  Stderr: {result.stderr[:1000]}")  # First 1000 chars
+            if result.stdout:
+                print(f"  Stdout: {result.stdout[-1000:]}")  # Last 1000 chars
             return False
         
-        print(f"  ✓ Render completed in {elapsed:.1f}s")
+        print(f"  [OK] Render completed in {elapsed:.1f}s")
         
-        # Verify output
-        if not Path(output_mp4).exists():
-            print(f"  ✗ Output file not created: {output_mp4}")
+        # Verify output - Blender adds frame numbers to filename
+        # Try to find the actual output file
+        output_base = Path(output_mp4).stem
+        output_dir = Path(output_mp4).parent
+        
+        # Look for files with frame numbers
+        possible_outputs = [
+            output_mp4,  # Original name
+            output_dir / f"{output_base}0001-9999.mp4",  # With frame range
+            output_dir / f"{output_base}001-999.mp4",
+            output_dir / f"{output_base}0001-0499.mp4",  # For 499 frames
+        ]
+        
+        # Also search with glob pattern
+        glob_matches = list(output_dir.glob(f"{output_base}*.mp4"))
+        
+        actual_output = None
+        for possible in possible_outputs:
+            if possible.exists():
+                actual_output = possible
+                break
+        
+        if not actual_output and glob_matches:
+            actual_output = glob_matches[0]
+        
+        if not actual_output:
+            print(f"  [ERROR] Output file not created: {output_mp4}")
+            print(f"  Searched for: {output_base}*.mp4")
             return False
+        
+        # Rename to expected name if different
+        if actual_output != Path(output_mp4):
+            print(f"  • Found output: {actual_output.name}")
+            print(f"  • Renaming to: {Path(output_mp4).name}")
+            actual_output.rename(output_mp4)
             
         file_size = Path(output_mp4).stat().st_size / (1024 * 1024)  # MB
-        print(f"  ✓ Output file size: {file_size:.1f} MB")
+        print(f"  [OK] Output file size: {file_size:.1f} MB")
         
         return True
         
     except subprocess.TimeoutExpired:
-        print(f"  ✗ Render timeout after 30 minutes")
+        print(f"  [ERROR] Render timeout after 30 minutes")
         return False
     except Exception as e:
-        print(f"  ✗ Render error: {e}")
+        print(f"  [ERROR] Render error: {e}")
         return False
 
 def cleanup_obj_files(obj_dir, do_cleanup=False):
@@ -193,9 +253,9 @@ def cleanup_obj_files(obj_dir, do_cleanup=False):
             
             # Delete directory
             shutil.rmtree(obj_path)
-            print(f"  ✓ Deleted {num_files} OBJ files")
+            print(f"  [OK] Deleted {num_files} OBJ files")
     except Exception as e:
-        print(f"  ✗ Cleanup failed: {e}")
+        print(f"  [ERROR] Cleanup failed: {e}")
 
 def main():
     """Main pipeline execution"""
