@@ -530,9 +530,16 @@ class ParallelMasterPipeline:
         self.smplx_path = Path(smplx_path)
         self.gender = gender
         
-        # Parallel processing configuration
+        # Parallel processing configuration with RunPod-safe limits
         if max_workers is None:
-            self.max_workers = max(1, multiprocessing.cpu_count() - 1)  # Leave 1 core for system
+            cpu_count = multiprocessing.cpu_count()
+            # Conservative worker limits for stability
+            if cpu_count >= 24:  # High-end systems like RunPod RTX 4090
+                self.max_workers = min(8, cpu_count // 4)  # Cap at 8 workers for stability
+            elif cpu_count >= 12:  # Mid-range systems
+                self.max_workers = min(6, cpu_count // 2)
+            else:  # Low-end systems
+                self.max_workers = max(1, cpu_count - 1)
         else:
             self.max_workers = max_workers
         
@@ -643,30 +650,51 @@ class ParallelMasterPipeline:
         mesh_sequence = []
         successful_frames = 0
         
+        print(f"🚀 Starting parallel processing with {self.max_workers} workers...")
+        print(f"   CPU cores available: {multiprocessing.cpu_count()}")
+        print(f"   Memory safety: Workers limited for stability")
+        
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            print(f"🚀 Starting parallel processing...")
-            
             # Submit all tasks
             future_to_frame = {executor.submit(process_single_frame, arg): arg[0] 
                               for arg in process_args}
             
+            print(f"   Submitted {len(future_to_frame)} tasks to worker pool")
+            
             # Collect results as they complete
             results = {}
+            completed_count = 0
+            total_tasks = len(future_to_frame)
+            
             for future in future_to_frame:
                 frame_idx = future_to_frame[future]
                 try:
                     frame_idx, mesh_data = future.result(timeout=300)  # 5 minute timeout per frame
                     results[frame_idx] = mesh_data
+                    completed_count += 1
                     
                     if mesh_data is not None:
                         successful_frames += 1
-                        print(f"  ✅ Frame {frame_idx}: {mesh_data['vertex_count']} vertices")
+                        if completed_count % 10 == 0 or completed_count == total_tasks:
+                            print(f"  ✅ Frame {frame_idx}: {mesh_data['vertex_count']} vertices")
                     else:
-                        print(f"  ❌ Frame {frame_idx}: Failed")
+                        if completed_count % 10 == 0 or completed_count == total_tasks:
+                            print(f"  ❌ Frame {frame_idx}: Failed")
+                            
+                    # Progress reporting every 10 completed frames
+                    if completed_count % 10 == 0 or completed_count == total_tasks:
+                        progress = (completed_count / total_tasks) * 100
+                        print(f"   Progress: {completed_count}/{total_tasks} ({progress:.1f}%) - {successful_frames} successful")
                         
                 except Exception as e:
                     print(f"  ❌ Frame {frame_idx}: Exception - {e}")
                     results[frame_idx] = None
+                    completed_count += 1
+                    
+                    # Progress reporting for exceptions too
+                    if completed_count % 10 == 0 or completed_count == total_tasks:
+                        progress = (completed_count / total_tasks) * 100
+                        print(f"   Progress: {completed_count}/{total_tasks} ({progress:.1f}%) - {successful_frames} successful")
         
         # Sort results by frame index and collect successful meshes
         sorted_results = [results[i] for i in sorted(results.keys())]
