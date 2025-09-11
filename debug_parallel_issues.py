@@ -119,7 +119,8 @@ def test_parallel_configuration(test_name, task_func, args_list, max_workers=2):
         
         elapsed = time.time() - start_time
         print(f"   ✅ {test_name} completed in {elapsed:.1f}s")
-        print(f"   Success rate: {len([r for r in results if not r.startswith('Failed')]}/{len(results)}")
+        successful = len([r for r in results if not r.startswith('Failed')])
+        print(f"   Success rate: {successful}/{len(results)}")
         return True
         
     except Exception as e:
