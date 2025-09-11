@@ -602,7 +602,7 @@ class ParallelMasterPipeline:
         return landmarks_data
     
     def execute_parallel_pipeline(self, video_path, output_dir="parallel_output", 
-                                 max_frames=None, frame_skip=1):
+                                 max_frames=None, frame_skip=1, timeout_per_frame=300):
         """Execute PARALLEL pipeline WITHOUT temporal smoothing"""
         
         start_time = time.time()
@@ -669,7 +669,7 @@ class ParallelMasterPipeline:
             for future in future_to_frame:
                 frame_idx = future_to_frame[future]
                 try:
-                    frame_idx, mesh_data = future.result(timeout=300)  # 5 minute timeout per frame
+                    frame_idx, mesh_data = future.result(timeout=timeout_per_frame)  # Configurable timeout per frame
                     results[frame_idx] = mesh_data
                     completed_count += 1
                     
