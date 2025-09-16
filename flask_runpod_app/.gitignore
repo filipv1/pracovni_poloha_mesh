@@ -1,0 +1,32 @@
+# Environment variables
+.env
+.env.*
+
+# Database
+*.db
+instance/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Uploads and local storage
+uploads/*
+!uploads/.gitkeep
+local_storage/
+results/
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+nul

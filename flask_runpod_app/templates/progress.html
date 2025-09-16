@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Processing - {{ job.video_filename }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="bg-white overflow-hidden shadow-xl rounded-lg">
+        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+            <h2 class="text-2xl font-bold text-white">
+                <i class="fas fa-chart-line mr-2"></i>Processing Your Video
+            </h2>
+        </div>
+        
+        <div class="p-6">
+            <!-- Video info -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Filename</p>
+                        <p class="font-medium text-gray-900">{{ job.video_filename }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Size</p>
+                        <p class="font-medium text-gray-900">{{ job.video_size_mb|round(1) }} MB</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Job ID</p>
+                        <p class="font-medium text-gray-900">#{{ job.id }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Progress display -->
+            <div id="progress-container">
+                <!-- Status indicator -->
+                <div class="flex items-center justify-center mb-6">
+                    <div id="status-icon" class="text-6xl">
+                        {% if job.status == 'queued' %}
+                        <i class="fas fa-hourglass-half text-yellow-500 animate-pulse-slow"></i>
+                        {% elif job.status == 'processing' %}
+                        <i class="fas fa-cog fa-spin text-indigo-600"></i>
+                        {% elif job.status == 'completed' %}
+                        <i class="fas fa-check-circle text-green-500"></i>
+                        {% elif job.status == 'failed' %}
+                        <i class="fas fa-times-circle text-red-500"></i>
+                        {% else %}
+                        <i class="fas fa-spinner fa-spin text-gray-500"></i>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Status text -->
+                <h3 id="status-text" class="text-2xl font-bold text-center mb-2 text-gray-900">
+                    {% if job.status == 'queued' %}
+                    Waiting in Queue
+                    {% elif job.status == 'processing' %}
+                    Processing
+                    {% elif job.status == 'completed' %}
+                    Completed Successfully
+                    {% elif job.status == 'failed' %}
+                    Processing Failed
+                    {% else %}
+                    Initializing
+                    {% endif %}
+                </h3>
+                
+                <!-- Stage message -->
+                <p id="stage-message" class="text-center text-gray-600 mb-6">
+                    {{ job.processing_stage or 'Preparing...' }}
+                </p>
+                
+                <!-- Progress bar -->
+                <div class="mb-6">
+                    <div class="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>Progress</span>
+                        <span id="progress-percent">{{ job.progress_percent|round(0)|int }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div id="progress-bar" 
+                             class="bg-gradient-to-r from-indigo-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                             style="width: {{ job.progress_percent|round(0)|int }}%"></div>
+                    </div>
+                </div>
+                
+                <!-- Processing stages -->
+                <div id="stages-container" class="space-y-3 mb-6">
+                    <div class="stage-item flex items-center" data-stage="uploading">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-upload text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">Uploading</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-item flex items-center" data-stage="mediapipe">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-eye text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">MediaPipe Detection</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-item flex items-center" data-stage="smplx">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-user text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">SMPL-X Fitting</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-item flex items-center" data-stage="angles">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-ruler-combined text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">Angle Calculation</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-item flex items-center" data-stage="analysis">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-chart-bar text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">Ergonomic Analysis</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-item flex items-center" data-stage="downloading">
+                        <div class="stage-icon flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+                            <i class="fas fa-download text-sm"></i>
+                        </div>
+                        <div class="ml-3 flex-grow">
+                            <p class="text-sm font-medium text-gray-900">Preparing Downloads</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Time estimates -->
+                <div id="time-estimates" class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-sm text-gray-500">Time Elapsed</p>
+                        <p id="time-elapsed" class="text-lg font-medium text-gray-900">--:--</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-sm text-gray-500">Time Remaining</p>
+                        <p id="time-remaining" class="text-lg font-medium text-gray-900">--:--</p>
+                    </div>
+                </div>
+                
+                <!-- Download section (hidden initially) -->
+                <div id="download-section" class="hidden">
+                    <div class="border-t pt-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">
+                            <i class="fas fa-download text-green-500 mr-2"></i>Files Ready for Download
+                        </h4>
+                        <div id="download-links" class="space-y-3">
+                            <!-- Download links will be inserted here -->
+                        </div>
+                        <p class="text-sm text-gray-500 mt-4">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Files will be available for 7 days
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Error section (hidden initially) -->
+                <div id="error-section" class="hidden">
+                    <div class="border-t pt-6">
+                        <div class="bg-red-50 rounded-lg p-4">
+                            <h4 class="text-lg font-semibold text-red-900 mb-2">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>Processing Error
+                            </h4>
+                            <p id="error-message" class="text-sm text-red-700"></p>
+                        </div>
+                        <div class="mt-4 flex justify-center">
+                            <a href="{{ url_for('upload') }}" 
+                               class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                                <i class="fas fa-redo mr-2"></i>Try Another Video
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/progress.js') }}"></script>
+<script>
+    // Initialize progress tracker with job ID
+    const progressTracker = new ProgressTracker({{ job.id }});
+</script>
+{% endblock %}

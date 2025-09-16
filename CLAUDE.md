@@ -49,7 +49,7 @@ python create_combined_angles_csv.py fil_vid_meshes.pkl combined_angles.csv
 python neck_angle_calculator_like_arm.py
 ```
 
-### Skin-based Analysis Commands (NEW)
+### Skin-based Analysis Commands
 ```bash
 # Skin-based trunk angle calculation
 python trunk_angle_calculator_skin.py
@@ -117,7 +117,7 @@ This repository contains four main systems:
 - Sagittal and frontal plane measurements
 - Frame-stable calculations with confidence scoring
 
-### 4. Skin-based Analysis System (NEW)
+### 4. Skin-based Analysis System
 - **Purpose**: Calculate angles using actual skin vertices instead of internal joints
 - **Trunk Angles**: `trunk_angle_calculator_skin.py` - Uses surface vertices for trunk
 - **Neck Angles**: `neck_angle_calculator_skin.py` - Uses head and neck skin vertices

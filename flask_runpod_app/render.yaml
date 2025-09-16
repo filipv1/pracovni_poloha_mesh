@@ -1,0 +1,81 @@
+services:
+  - type: web
+    name: flask-runpod-pose-analysis
+    runtime: python
+    region: oregon  # or frankfurt, ohio, singapore
+    plan: free  # or starter ($7/month)
+    
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --worker-class sync --timeout 120 --bind 0.0.0.0:$PORT
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Environment variables (set these in Render dashboard)
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      
+      - key: DATABASE_URL
+        value: sqlite:////opt/render/project/src/data/app.db
+      
+      - key: FLASK_ENV
+        value: production
+      
+      # RunPod Configuration (set in dashboard)
+      - key: RUNPOD_API_KEY
+        sync: false  # Set manually in dashboard
+      
+      - key: RUNPOD_POD_ID
+        sync: false  # Set manually in dashboard
+      
+      # Cloudflare R2 Configuration (set in dashboard)
+      - key: R2_ACCOUNT_ID
+        sync: false  # Set manually in dashboard
+      
+      - key: R2_ACCESS_KEY_ID
+        sync: false  # Set manually in dashboard
+      
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false  # Set manually in dashboard
+      
+      - key: R2_BUCKET_NAME
+        value: pose-analysis-files
+      
+      # Email Configuration (set in dashboard)
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      
+      - key: SMTP_PORT
+        value: 587
+      
+      - key: SMTP_USERNAME
+        sync: false  # Set manually in dashboard
+      
+      - key: SMTP_PASSWORD
+        sync: false  # Set manually in dashboard
+      
+      - key: EMAIL_FROM
+        sync: false  # Set manually in dashboard
+      
+      # Application Settings
+      - key: MAX_UPLOAD_SIZE_MB
+        value: 5120
+      
+      - key: MAX_VIDEO_DURATION_SECONDS
+        value: 1800
+      
+      - key: JOB_RETRY_LIMIT
+        value: 10
+      
+      - key: POD_IDLE_TIMEOUT_SECONDS
+        value: 300
+      
+      - key: FILE_RETENTION_DAYS
+        value: 7
+    
+    # Persistent disk for SQLite database and uploads
+    disk:
+      name: flask-runpod-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1  # Free tier includes 1GB

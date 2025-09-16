@@ -1,0 +1,4 @@
+# Quick pip updates - only packages that might change frequently
+# Heavy packages like torch, mediapipe are in conda env on Network Volume
+boto3>=1.28.0
+requests>=2.31.0

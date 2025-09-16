@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Video - Pose Analysis{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="bg-white overflow-hidden shadow-xl rounded-lg">
+        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+            <h2 class="text-2xl font-bold text-white">
+                <i class="fas fa-video mr-2"></i>Upload Video for Analysis
+            </h2>
+        </div>
+        
+        <div class="p-6">
+            <!-- Upload area -->
+            <div id="drop-zone" 
+                 class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-indigo-500 transition-colors cursor-pointer">
+                <div id="drop-zone-content">
+                    <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+                    <p class="text-xl text-gray-700 mb-2">Drag & drop your video here</p>
+                    <p class="text-sm text-gray-500 mb-4">or</p>
+                    <button class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+                        Browse Files
+                    </button>
+                    <input type="file" id="file-input" accept="video/mp4" class="hidden">
+                </div>
+                
+                <!-- File preview (hidden initially) -->
+                <div id="file-preview" class="hidden">
+                    <i class="fas fa-file-video text-6xl text-indigo-600 mb-4"></i>
+                    <p class="text-lg font-medium text-gray-900" id="file-name"></p>
+                    <p class="text-sm text-gray-500 mb-4">
+                        Size: <span id="file-size"></span> MB
+                    </p>
+                    <div class="flex justify-center space-x-4">
+                        <button id="upload-btn" 
+                                class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                            <i class="fas fa-rocket mr-2"></i>Start Processing
+                        </button>
+                        <button id="cancel-btn" 
+                                class="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-times mr-2"></i>Cancel
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Upload progress (hidden initially) -->
+                <div id="upload-progress" class="hidden">
+                    <i class="fas fa-spinner fa-spin text-6xl text-indigo-600 mb-4"></i>
+                    <p class="text-lg font-medium text-gray-900 mb-2">Uploading...</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2">
+                        <span id="progress-text">0%</span> complete
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Requirements -->
+            <div class="mt-8 bg-gray-50 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-info-circle text-indigo-600 mr-2"></i>Requirements
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-medium text-gray-900">Video Format</p>
+                            <p class="text-sm text-gray-600">MP4 format only</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-medium text-gray-900">Maximum Size</p>
+                            <p class="text-sm text-gray-600">5 GB file size limit</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-medium text-gray-900">Duration</p>
+                            <p class="text-sm text-gray-600">Maximum 30 minutes</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-medium text-gray-900">Processing</p>
+                            <p class="text-sm text-gray-600">Ultra quality with skin-based analysis</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Processing steps -->
+            <div class="mt-8">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-cogs text-indigo-600 mr-2"></i>Processing Pipeline
+                </h3>
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-medium text-indigo-600">1</span>
+                        </div>
+                        <p class="ml-3 text-sm text-gray-700">
+                            <span class="font-medium">MediaPipe Detection:</span> Extract 33 3D landmarks per frame
+                        </p>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-medium text-indigo-600">2</span>
+                        </div>
+                        <p class="ml-3 text-sm text-gray-700">
+                            <span class="font-medium">SMPL-X Fitting:</span> Create detailed 3D human mesh
+                        </p>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-medium text-indigo-600">3</span>
+                        </div>
+                        <p class="ml-3 text-sm text-gray-700">
+                            <span class="font-medium">Angle Calculation:</span> Compute skin-based ergonomic angles
+                        </p>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-medium text-indigo-600">4</span>
+                        </div>
+                        <p class="ml-3 text-sm text-gray-700">
+                            <span class="font-medium">Analysis Report:</span> Generate comprehensive XLSX report
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}
