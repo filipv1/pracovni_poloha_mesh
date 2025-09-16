@@ -1,0 +1,30 @@
+# Requirements for RunPod GPU processing
+# PyTorch s CUDA (nainstalovat první samostatně):
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# Computer Vision
+mediapipe==0.10.8
+opencv-python==4.8.1.78
+
+# 3D Processing
+smplx==0.1.28
+trimesh==4.0.0
+open3d==0.18.0
+scipy==1.10.1
+
+# Data processing
+numpy==1.24.3
+pandas==2.0.3
+openpyxl==3.1.2
+Pillow==10.0.1
+
+# Storage and API
+boto3==1.28.57
+requests==2.31.0
+
+# Web framework (pro případné API)
+flask==2.3.3
+
+# Utils
+python-dotenv==1.0.0
+tqdm==4.66.1
