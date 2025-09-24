@@ -1,0 +1,29 @@
+name = "ergonomic-analyzer"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "JOBS"
+id = "YOUR_JOBS_KV_ID"
+
+[[kv_namespaces]]
+binding = "LOGS"
+id = "YOUR_LOGS_KV_ID"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "ergonomic-results"
+
+# Environment variables (set in dashboard or via secrets)
+[vars]
+WORKER_URL = "https://ergonomic-analyzer.YOUR_SUBDOMAIN.workers.dev"
+FRONTEND_URL = "https://YOUR_USERNAME.github.io/ergonomic-analyzer"
+
+# Secrets (set via wrangler secret)
+# wrangler secret put RUNPOD_API_KEY
+# wrangler secret put RUNPOD_ENDPOINT_ID
+# wrangler secret put RESEND_API_KEY
+# wrangler secret put AUTH_PASSWORD_HASH
+# wrangler secret put JWT_SECRET

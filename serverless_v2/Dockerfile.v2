@@ -1,0 +1,37 @@
+# Ergonomic Analyzer V2 - Dockerfile
+# Base image with PyTorch, CUDA, and Python 3.10
+# This version installs dependencies globally using pip, same as the original working Dockerfile.
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
+
+# Set working directory
+WORKDIR /workspace
+
+# 1. Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Python dependencies using pip
+# First, install mediapipe and its dependencies
+RUN python -m pip install --upgrade pip && \
+    pip install mediapipe==0.10.9
+
+# Copy and install requirements for the handler
+COPY serverless_v2/runpod_handler/requirements.txt /tmp/handler_requirements.txt
+RUN pip install -r /tmp/handler_requirements.txt
+
+# Install dependencies for the main processing script
+RUN pip install smplx trimesh opencv-python-headless matplotlib
+
+# 3. Copy application code
+COPY serverless_v2/runpod_handler /workspace/serverless_v2/runpod_handler
+COPY serverless_v2/processing_script /workspace/serverless_v2/processing_script
+
+# Copy the SMPL-X models
+COPY models /workspace/models
+
+# 4. Set the entrypoint
+# The handler will be started by this command.
+CMD ["python", "-u", "/workspace/serverless_v2/runpod_handler/handler.py"]

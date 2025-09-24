@@ -1,0 +1,69 @@
+============================================================
+              ✅ ŘEŠENÍ - JAK SPUSTIT V3 FRONTEND
+============================================================
+
+PROBLÉM:
+Frontend otevřený jako file:// nemůže volat HTTPS API (CORS)
+
+ŘEŠENÍ:
+Spustit frontend přes HTTP server
+
+============================================================
+                    NÁVOD - 2 KROKY
+============================================================
+
+KROK 1: SPUSŤ FRONTEND SERVER
+------------------------------
+cd serverless_v3
+RUN_FRONTEND.bat
+
+(Nebo manuálně: cd frontend && python -m http.server 8000)
+
+
+KROK 2: OTEVŘI V PROHLÍŽEČI
+----------------------------
+http://localhost:8000/index-configured.html
+
+
+============================================================
+                  JAK TO FUNGUJE
+============================================================
+
+1. Python HTTP server poskytuje frontend přes http://
+2. http:// může volat https:// API (CORS funguje)
+3. Frontend volá RunPod API přímo
+4. RunPod zpracovává videa asynchronně
+5. Frontend polluje status každých 5 sekund
+
+============================================================
+                    TESTOVÁNÍ
+============================================================
+
+1. Nahraj malé video (< 10MB)
+2. Sleduj progress
+3. Zkontroluj RunPod logy na:
+   https://www.runpod.io/console/serverless
+
+============================================================
+                   TROUBLESHOOTING
+============================================================
+
+❌ "Failed to fetch"
+   → Používáš file:// místo http://
+   → Spusť RUN_FRONTEND.bat
+
+❌ "Connection refused"
+   → Python server neběží
+   → Spusť RUN_FRONTEND.bat
+
+❌ "404 Not Found"
+   → Špatná URL
+   → Použij: http://localhost:8000/index-configured.html
+
+❌ Handler error v RunPod logu
+   → Rebuild Docker image s opravami
+   → docker build & push
+
+============================================================
+                    HOTOVO! 🚀
+============================================================

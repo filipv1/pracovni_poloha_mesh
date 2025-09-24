@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Tests
+test_*.py
+tests/
+
+# Frontend (not needed in Docker)
+frontend/
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Large model files (add separately)
+# models/smplx/*.npz # Commented out - we include docker_files/models/
+# models/smplx/*.pkl
+
+# Output files
+output/
+results/
+*.pkl
+*.mp4
+*.avi
+*.mov
+*.csv
+*.xlsx

@@ -1,0 +1,26 @@
+# Fast build - Update existing image with V3 components
+FROM vaclavik/ergonomic-analysis-serverless-v3-fixed:latest
+
+# Set working directory
+WORKDIR /app
+
+# Install boto3 for R2/S3 support
+RUN pip install --no-cache-dir boto3==1.34.0 botocore==1.34.0
+
+# Remove old handler
+RUN rm -f /app/handler.py
+
+# Copy the V3 serverless components
+COPY serverless_v3 /app/serverless_v3
+
+# Copy updated processing scripts if needed
+COPY run_production_simple_p.py /app/
+COPY production_3d_pipeline_clean.py /app/
+COPY pracovni_poloha2 /app/pracovni_poloha2
+
+# Set environment variables for R2/S3
+ENV STORAGE_PROVIDER=r2
+ENV PYTHONUNBUFFERED=1
+
+# Use V3 handler instead of old one
+CMD ["python", "-u", "serverless_v3/runpod/handler_v3.py"]

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Local testing container for the processing pipeline
+  ergonomic-processor:
+    build:
+      context: runpod
+      dockerfile: Dockerfile
+    volumes:
+      # Mount code for development
+      - ../:/app/code:ro
+      # Mount test data
+      - ./test:/app/test
+      # Output directory
+      - ./output:/app/output
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0  # Will fallback to CPU if no GPU
+      - TEST_MODE=1
+    command: python -u handler_local_test.py
+    ports:
+      - "8000:8000"  # Optional: for local API testing
+
+  # Simple web server for frontend testing
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80

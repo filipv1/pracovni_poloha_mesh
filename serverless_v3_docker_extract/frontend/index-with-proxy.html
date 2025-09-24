@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ergonomická Analýza V3 - Asynchronní Zpracování</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragging {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .file-info {
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .file-info.active {
+            display: block;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .status-message {
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .status-message.error {
+            background: #ffe6e6;
+            color: #cc0000;
+        }
+
+        .status-message.success {
+            background: #e6ffe6;
+            color: #006600;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0fff4;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        .download-button {
+            background: linear-gradient(135deg, #00c851 0%, #007e33 100%);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .steps {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+
+        .step.completed .step-number {
+            background: #00c851;
+        }
+
+        .step.active .step-number {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏋️ Ergonomická Analýza V3</h1>
+        <div class="info-box">
+            <strong>Asynchronní Zpracovávací Pipeline</strong><br>
+            Podporuje jakoukoliv velikost videa bez timeoutů!
+        </div>
+
+        <div class="steps">
+            <div class="step" id="step-upload">
+                <div class="step-number">1</div>
+                <div>Nahrání videa do cloudového úložiště</div>
+            </div>
+            <div class="step" id="step-process">
+                <div class="step-number">2</div>
+                <div>Zpracování pomocí SMPL-X pipeline</div>
+            </div>
+            <div class="step" id="step-download">
+                <div class="step-number">3</div>
+                <div>Stažení výsledků</div>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📹</div>
+            <p><strong>Přetáhněte video sem nebo klikněte pro procházení</strong></p>
+            <p>Podporované formáty: MP4, AVI, MOV • Jakákoliv velikost</p>
+            <input type="file" id="fileInput" accept=".mp4,.avi,.mov">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <strong>Vybraný soubor:</strong> <span id="fileName"></span><br>
+            <strong>Velikost:</strong> <span id="fileSize"></span>
+        </div>
+
+        <button id="uploadButton" style="display:none;">Nahrát a Zpracovat</button>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="status-message" id="statusMessage">Inicializace...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <h3>✅ Zpracování Dokončeno!</h3>
+            <p id="resultInfo"></p>
+            <div id="downloadButtons" style="margin-top: 20px;">
+                <!-- Download buttons will be inserted here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Konfigurace - Používání proxy pro vyhnuti se CORS
+        const PROXY_URL = 'http://localhost:5001';
+        const USE_PROXY = true;
+        const POLLING_INTERVAL = 5000; // 5 sekund
+
+        // Stav
+        let selectedFile = null;
+        let currentJobId = null;
+        let pollingTimer = null;
+
+        // DOM Elementy
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadButton = document.getElementById('uploadButton');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultSection = document.getElementById('resultSection');
+        const resultInfo = document.getElementById('resultInfo');
+
+        // Indikátory kroků
+        const stepUpload = document.getElementById('step-upload');
+        const stepProcess = document.getElementById('step-process');
+        const stepDownload = document.getElementById('step-download');
+
+        // Výběr souboru
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragging');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragging');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelection(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelection(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelection(file) {
+            const validTypes = ['video/mp4', 'video/avi', 'video/quicktime'];
+
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp4|avi|mov)$/i)) {
+                alert('Prosím vyberte platný video soubor (MP4, AVI nebo MOV)');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('active');
+            uploadButton.style.display = 'block';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        // Nahrávání a zpracování
+        uploadButton.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            try {
+                uploadButton.disabled = true;
+                progressContainer.classList.add('active');
+                stepUpload.classList.add('active');
+
+                // Krok 1: Získání předpodepsané URL pro nahrání
+                updateStatus('Požadování URL pro nahrání...');
+                updateProgress(10);
+
+                const uploadUrlResponse = await callRunPodAPI({
+                    action: 'generate_upload_url',
+                    filename: selectedFile.name
+                });
+
+                console.log('Upload URL Response:', uploadUrlResponse);
+
+                // Zpracování vnořené struktury výstupu z RunPod
+                let actualResponse = uploadUrlResponse;
+                if (uploadUrlResponse.output) {
+                    actualResponse = uploadUrlResponse.output;
+                }
+
+                if (!actualResponse || actualResponse.status !== 'success') {
+                    console.error('Upload URL Response failed:', actualResponse);
+                    throw new Error('Nepodařilo se získat URL pro nahrání');
+                }
+
+                const uploadUrl = actualResponse.upload_url;
+                const videoKey = actualResponse.video_key;
+
+                if (!uploadUrl || !videoKey) {
+                    console.error('Missing upload_url or video_key:', { uploadUrl, videoKey });
+                    throw new Error('Neplatná odpověď URL pro nahrání');
+                }
+
+                // Krok 2: Nahrání videa na R2/S3
+                updateStatus(`Nahrávání ${selectedFile.name}...`);
+                updateProgress(20);
+
+                // Nahrávání přes proxy pro vyhnuti se CORS
+                const uploadResponse = await fetch(`${PROXY_URL}/upload?url=${encodeURIComponent(uploadUrl)}`, {
+                    method: 'POST',
+                    body: selectedFile
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Nepodařilo se nahrát video');
+                }
+
+                stepUpload.classList.remove('active');
+                stepUpload.classList.add('completed');
+                stepProcess.classList.add('active');
+
+                // Krok 3: Spuštění zpracování
+                updateStatus('Spouštění zpracování videa...');
+                updateProgress(30);
+
+                const processResponse = await callRunPodAPI({
+                    action: 'start_processing',
+                    video_key: videoKey,
+                    quality: 'medium'
+                });
+
+                // Zpracování vnořené struktury výstupu
+                let actualProcessResponse = processResponse;
+                if (processResponse.output) {
+                    actualProcessResponse = processResponse.output;
+                }
+
+                if (actualProcessResponse.status !== 'success') {
+                    throw new Error('Nepodařilo se spustit zpracování');
+                }
+
+                currentJobId = actualProcessResponse.job_id;
+
+                // Krok 4: Spuštění dotazování na stav
+                startPolling();
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(`Chyba: ${error.message}`, 'error');
+                uploadButton.disabled = false;
+                resetSteps();
+            }
+        });
+
+        async function callRunPodAPI(input) {
+            const response = await fetch(`${PROXY_URL}/runpod`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ input })
+            });
+
+            const data = await response.json();
+            console.log('RunPod response:', data);
+
+            // RunPod vrací data v různých formátech v závislosti na konfiguraci
+            if (data.status === 'COMPLETED' && data.output) {
+                // RunPod serverless formát s wrapprem výstupu
+                console.log('Using output from COMPLETED response');
+                return data.output;
+            } else if (data.status === 'COMPLETED') {
+                // COMPLETED bez výstupu - vrátit celá data
+                console.log('COMPLETED without output, returning whole data');
+                return data;
+            } else if (data.output) {
+                // Přímý formát výstupu
+                console.log('Using output field');
+                return data.output;
+            } else if (data.status === 'success' || data.job_status) {
+                // Přímý formát návratu (zpětná kompatibilita)
+                console.log('Using direct data');
+                return data;
+            } else {
+                console.error('Unexpected response format:', data);
+                throw new Error(data.error || 'Chyba RunPod API');
+            }
+        }
+
+        function startPolling() {
+            pollingTimer = setInterval(async () => {
+                try {
+                    const statusResponse = await callRunPodAPI({
+                        action: 'get_status',
+                        job_id: currentJobId
+                    });
+
+                    console.log('Status Response:', statusResponse);
+
+                    // Zpracování hluboce vnořené struktury výstupu z RunPod
+                    let actualStatusResponse = statusResponse;
+
+                    // První úroveň výstupu
+                    if (statusResponse.output) {
+                        actualStatusResponse = statusResponse.output;
+                    }
+
+                    // Druhá úroveň výstupu (RunPod dvojité vnoření)
+                    if (actualStatusResponse.output) {
+                        actualStatusResponse = actualStatusResponse.output;
+                    }
+
+                    console.log('Actual Status Response:', actualStatusResponse);
+
+                    if (actualStatusResponse.status !== 'success') {
+                        console.error('Status check failed:', actualStatusResponse);
+                        throw new Error('Nepodařilo se získat stav úlohy');
+                    }
+
+                    // Získání stavu úlohy z odpovědi
+                    const jobStatus = actualStatusResponse.job_status || actualStatusResponse;
+
+                    // Aktualizace pokroku
+                    const progress = Math.min(30 + (jobStatus.progress * 0.7), 100);
+                    updateProgress(progress);
+
+                    // Aktualizace stavové zprávy
+                    if (jobStatus.status === 'processing') {
+                        updateStatus(`Zpracovávání... ${jobStatus.progress}%`);
+                    } else if (jobStatus.status === 'completed') {
+                        stopPolling();
+                        onProcessingComplete(jobStatus);
+                    } else if (jobStatus.status === 'failed') {
+                        stopPolling();
+                        onProcessingFailed(jobStatus.error);
+                    }
+
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    // Pokračovat v dotazování i při chybě
+                }
+            }, POLLING_INTERVAL);
+        }
+
+        function stopPolling() {
+            if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+            }
+        }
+
+        function onProcessingComplete(jobStatus) {
+            stepProcess.classList.remove('active');
+            stepProcess.classList.add('completed');
+            stepDownload.classList.add('completed');
+
+            updateStatus('Zpracování dokončeno!', 'success');
+            updateProgress(100);
+
+            resultSection.classList.add('active');
+            resultInfo.textContent = `Vaše video bylo úspěšně zpracováno. ID úlohy: ${currentJobId}`;
+
+            // Vytvoření tlačítek pro stažení všech výsledků
+            const downloadButtonsContainer = document.getElementById('downloadButtons');
+            downloadButtonsContainer.innerHTML = '';
+
+            if (jobStatus.results) {
+                // Nový formát s více výsledky
+                const results = jobStatus.results;
+
+                // Vytvoření tlačítka pro PKL soubor
+                if (results.pkl_url) {
+                    createDownloadButton('3D Síť Data (PKL)', results.pkl_url, '🗂️');
+                }
+
+                // Vytvoření tlačítka pro CSV soubor
+                if (results.csv_url) {
+                    createDownloadButton('Data Úhlů (CSV)', results.csv_url, '📊');
+                }
+
+                // Vytvoření tlačítka pro Excel soubor
+                if (results.excel_url) {
+                    createDownloadButton('Ergonomická Analýza (Excel)', results.excel_url, '📈');
+                }
+
+                // Videa odstraněna z pipeline - pouze PKL, CSV a Excel dostupné
+            } else if (jobStatus.download_url) {
+                // Starý formát - jeden PKL soubor
+                createDownloadButton('Stáhnout Výsledky (PKL)', jobStatus.download_url, '📦');
+            }
+
+            uploadButton.disabled = false;
+            uploadButton.textContent = 'Zpracovat Další Video';
+        }
+
+        function createDownloadButton(label, url, icon = '📥') {
+            const button = document.createElement('button');
+            button.className = 'download-button';
+            button.innerHTML = `${icon} ${label}`;
+            button.style.marginBottom = '10px';
+            button.onclick = () => window.open(url, '_blank');
+            document.getElementById('downloadButtons').appendChild(button);
+        }
+
+        function onProcessingFailed(error) {
+            updateStatus(`Zpracování selhalo: ${error}`, 'error');
+            uploadButton.disabled = false;
+            resetSteps();
+        }
+
+        function updateStatus(message, type = '') {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message';
+            if (type) statusMessage.classList.add(type);
+        }
+
+        function updateProgress(percent) {
+            progressFill.style.width = `${percent}%`;
+            progressFill.textContent = `${Math.round(percent)}%`;
+        }
+
+        function resetSteps() {
+            stepUpload.classList.remove('active', 'completed');
+            stepProcess.classList.remove('active', 'completed');
+            stepDownload.classList.remove('active', 'completed');
+        }
+
+    </script>
+</body>
+</html>

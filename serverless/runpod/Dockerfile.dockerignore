@@ -1,0 +1,14 @@
+# Ignore files for Docker build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+*.md
+test/
+output/
+*.mp4
+*.pkl
+*.csv
+*.xlsx

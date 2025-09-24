@@ -1,0 +1,20 @@
+# Simplified test Dockerfile to verify build works
+FROM runpod/pytorch:2.0.1-py3.10-cuda11.8.0-devel-ubuntu22.04
+
+WORKDIR /app
+
+# Just test if we can install the packages
+COPY requirements-minimal.txt .
+
+# Try different installation strategies
+RUN python -m pip install --upgrade pip && \
+    pip list && \
+    echo "=== Attempting installation ===" && \
+    pip install --no-cache-dir -r requirements-minimal.txt || \
+    echo "=== Retrying with ignore-installed ===" && \
+    pip install --no-cache-dir --ignore-installed -r requirements-minimal.txt
+
+# Simple test script
+RUN echo "import mediapipe; import cv2; import numpy; print('Imports work!')" > test.py
+
+CMD ["python", "test.py"]

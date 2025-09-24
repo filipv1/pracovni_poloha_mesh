@@ -1,0 +1,38 @@
+# Alternative Dockerfile with more robust dependency handling
+FROM runpod/pytorch:2.0.1-py3.10-cuda11.8.0-devel-ubuntu22.04
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements-frozen.txt .
+
+# Complete reinstall approach - ignore all conflicts
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir --force-reinstall --no-deps -r requirements-frozen.txt && \
+    pip install --no-cache-dir --force-reinstall -r requirements-frozen.txt || \
+    pip install --no-cache-dir --ignore-installed -r requirements-frozen.txt
+
+# Create directories
+RUN mkdir -p /app/models/smplx
+
+# Copy application code (will be done during build)
+COPY handler.py .
+COPY handler_local_test.py .
+
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=0
+
+CMD ["python", "-u", "handler.py"]

@@ -1,0 +1,26 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# Nespecifikujeme startCommand - použije se Procfile
+# Dočasně vypneme healthcheck
+# healthcheckPath = "/health"
+# healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+autoDeploy = false
+
+[[services]]
+serviceName = "web"
+
+[services.source]
+repo = "."
+
+[services.variables]
+FLASK_ENV = "production"
+FLASK_SECRET_KEY = { generate = true }
+PYTHONUNBUFFERED = "1"
+MAX_UPLOAD_SIZE = "5368709120"
+
+[services.volumes]
+mountPath = "/app/data"
+size = "10Gi"

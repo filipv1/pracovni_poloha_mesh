@@ -1,0 +1,34 @@
+# Ignore unnecessary files during Docker build
+*.md
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.local
+node_modules
+.DS_Store
+Thumbs.db
+
+# Ignore frontend files (not needed in Docker)
+frontend/
+full_proxy.py
+
+# Ignore build scripts and documentation
+build_and_push.bat
+*.bat
+*.sh
+
+# Ignore temporary files
+*.tmp
+*.log
+*.pkl
+*.mp4
+*.avi
+*.mov
+
+# Ignore config overrides
+.env.production
+.env.development

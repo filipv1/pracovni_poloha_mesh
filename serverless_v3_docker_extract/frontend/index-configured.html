@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ergonomic Analysis V3 - Async Processing</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragging {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .file-info {
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .file-info.active {
+            display: block;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .status-message {
+            background: #f0f2ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .status-message.error {
+            background: #ffe6e6;
+            color: #cc0000;
+        }
+
+        .status-message.success {
+            background: #e6ffe6;
+            color: #006600;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0fff4;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        .download-button {
+            background: linear-gradient(135deg, #00c851 0%, #007e33 100%);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .steps {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+
+        .step.completed .step-number {
+            background: #00c851;
+        }
+
+        .step.active .step-number {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏋️ Ergonomic Analysis V3</h1>
+        <div class="info-box">
+            <strong>Async Processing Pipeline</strong><br>
+            Supports any video size without timeouts!
+        </div>
+
+        <div class="steps">
+            <div class="step" id="step-upload">
+                <div class="step-number">1</div>
+                <div>Upload video to cloud storage</div>
+            </div>
+            <div class="step" id="step-process">
+                <div class="step-number">2</div>
+                <div>Process with SMPL-X pipeline</div>
+            </div>
+            <div class="step" id="step-download">
+                <div class="step-number">3</div>
+                <div>Download results</div>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📹</div>
+            <p><strong>Drop video here or click to browse</strong></p>
+            <p>Supported: MP4, AVI, MOV • Any size</p>
+            <input type="file" id="fileInput" accept=".mp4,.avi,.mov">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <strong>Selected file:</strong> <span id="fileName"></span><br>
+            <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+
+        <button id="uploadButton" style="display:none;">Upload and Process</button>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="status-message" id="statusMessage">Initializing...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <h3>✅ Processing Complete!</h3>
+            <p id="resultInfo"></p>
+            <button class="download-button" id="downloadButton">Download Results</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const RUNPOD_ENDPOINT = 'https://api.runpod.ai/v2/d1mtcfjymab45g/runsync';
+        const RUNPOD_API_KEY = 'YOUR_RUNPOD_API_KEY_HERE';
+        const POLLING_INTERVAL = 5000; // 5 seconds
+
+        // State
+        let selectedFile = null;
+        let currentJobId = null;
+        let pollingTimer = null;
+
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadButton = document.getElementById('uploadButton');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultSection = document.getElementById('resultSection');
+        const resultInfo = document.getElementById('resultInfo');
+        const downloadButton = document.getElementById('downloadButton');
+
+        // Step indicators
+        const stepUpload = document.getElementById('step-upload');
+        const stepProcess = document.getElementById('step-process');
+        const stepDownload = document.getElementById('step-download');
+
+        // File selection
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragging');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragging');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelection(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelection(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelection(file) {
+            const validTypes = ['video/mp4', 'video/avi', 'video/quicktime'];
+
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp4|avi|mov)$/i)) {
+                alert('Please select a valid video file (MP4, AVI, or MOV)');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('active');
+            uploadButton.style.display = 'block';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        // Upload and process
+        uploadButton.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            try {
+                uploadButton.disabled = true;
+                progressContainer.classList.add('active');
+                stepUpload.classList.add('active');
+
+                // Step 1: Get presigned upload URL
+                updateStatus('Requesting upload URL...');
+                updateProgress(10);
+
+                const uploadUrlResponse = await callRunPodAPI({
+                    action: 'generate_upload_url',
+                    filename: selectedFile.name
+                });
+
+                if (uploadUrlResponse.status !== 'success') {
+                    throw new Error('Failed to get upload URL');
+                }
+
+                const uploadUrl = uploadUrlResponse.upload_url;
+                const videoKey = uploadUrlResponse.video_key;
+
+                // Step 2: Upload video to R2/S3
+                updateStatus(`Uploading ${selectedFile.name}...`);
+                updateProgress(20);
+
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: selectedFile,
+                    headers: {
+                        'Content-Type': selectedFile.type
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload video');
+                }
+
+                stepUpload.classList.remove('active');
+                stepUpload.classList.add('completed');
+                stepProcess.classList.add('active');
+
+                // Step 3: Start processing
+                updateStatus('Starting video processing...');
+                updateProgress(30);
+
+                const processResponse = await callRunPodAPI({
+                    action: 'start_processing',
+                    video_key: videoKey,
+                    quality: 'medium'
+                });
+
+                if (processResponse.status !== 'success') {
+                    throw new Error('Failed to start processing');
+                }
+
+                currentJobId = processResponse.job_id;
+
+                // Step 4: Start polling for status
+                startPolling();
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(`Error: ${error.message}`, 'error');
+                uploadButton.disabled = false;
+                resetSteps();
+            }
+        });
+
+        async function callRunPodAPI(input) {
+            const response = await fetch(RUNPOD_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${RUNPOD_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ input })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'COMPLETED' && data.output) {
+                return data.output;
+            } else {
+                throw new Error(data.error || 'RunPod API error');
+            }
+        }
+
+        function startPolling() {
+            pollingTimer = setInterval(async () => {
+                try {
+                    const statusResponse = await callRunPodAPI({
+                        action: 'get_status',
+                        job_id: currentJobId
+                    });
+
+                    if (statusResponse.status !== 'success') {
+                        throw new Error('Failed to get job status');
+                    }
+
+                    const jobStatus = statusResponse.job_status;
+
+                    // Update progress
+                    const progress = Math.min(30 + (jobStatus.progress * 0.7), 100);
+                    updateProgress(progress);
+
+                    // Update status message
+                    if (jobStatus.status === 'processing') {
+                        updateStatus(`Processing... ${jobStatus.progress}%`);
+                    } else if (jobStatus.status === 'completed') {
+                        stopPolling();
+                        onProcessingComplete(jobStatus);
+                    } else if (jobStatus.status === 'failed') {
+                        stopPolling();
+                        onProcessingFailed(jobStatus.error);
+                    }
+
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    // Continue polling even on error
+                }
+            }, POLLING_INTERVAL);
+        }
+
+        function stopPolling() {
+            if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+            }
+        }
+
+        function onProcessingComplete(jobStatus) {
+            stepProcess.classList.remove('active');
+            stepProcess.classList.add('completed');
+            stepDownload.classList.add('completed');
+
+            updateStatus('Processing complete!', 'success');
+            updateProgress(100);
+
+            resultSection.classList.add('active');
+            resultInfo.textContent = `Your video has been successfully processed. Job ID: ${currentJobId}`;
+
+            // Store download URL
+            downloadButton.dataset.downloadUrl = jobStatus.download_url;
+
+            uploadButton.disabled = false;
+            uploadButton.textContent = 'Process Another Video';
+        }
+
+        function onProcessingFailed(error) {
+            updateStatus(`Processing failed: ${error}`, 'error');
+            uploadButton.disabled = false;
+            resetSteps();
+        }
+
+        function updateStatus(message, type = '') {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message';
+            if (type) statusMessage.classList.add(type);
+        }
+
+        function updateProgress(percent) {
+            progressFill.style.width = `${percent}%`;
+            progressFill.textContent = `${Math.round(percent)}%`;
+        }
+
+        function resetSteps() {
+            stepUpload.classList.remove('active', 'completed');
+            stepProcess.classList.remove('active', 'completed');
+            stepDownload.classList.remove('active', 'completed');
+        }
+
+        // Download results
+        downloadButton.addEventListener('click', () => {
+            const downloadUrl = downloadButton.dataset.downloadUrl;
+            if (downloadUrl) {
+                window.open(downloadUrl, '_blank');
+            }
+        });
+    </script>
+</body>
+</html>

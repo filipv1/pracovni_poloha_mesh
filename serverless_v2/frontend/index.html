@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ergonomic Analyzer V2</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8f9fa; color: #212529; margin: 0; padding: 2rem; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h1 { color: #343a40; text-align: center; }
+        .upload-area { border: 2px dashed #007bff; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: background-color 0.2s; }
+        .upload-area:hover { background-color: #e9ecef; }
+        .upload-area p { margin: 0; font-size: 1.2rem; color: #495057; }
+        #file-input { display: none; }
+        .status-box { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; background-color: #e9ecef; display: none; }
+        .status-box h3 { margin-top: 0; }
+        #status-message { font-weight: bold; }
+        .progress-bar { width: 100%; background-color: #dee2e6; border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
+        #progress { width: 0%; height: 20px; background-color: #007bff; transition: width 0.4s; }
+        .results { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; background-color: #d4edda; display: none; }
+        .results a { display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px; }
+        .error { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; background-color: #f8d7da; color: #721c24; display: none; }
+        .runpod-url-input { margin-top: 1rem; }
+        .runpod-url-input input { width: 100%; padding: 0.5rem; border: 1px solid #ced4da; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ergonomic Analyzer V2 (S3/Async)</h1>
+        <p style="text-align: center; color: #6c757d;">This version uses a robust asynchronous workflow with S3 storage.</p>
+
+        <div class="runpod-url-input">
+            <label for="runpod-url">RunPod API URL:</label>
+            <input type="text" id="runpod-url" placeholder="Enter your RunPod API URL here...">
+        </div>
+
+        <div id="upload-area" class="upload-area" style="margin-top: 1rem;">
+            <p>Click or drag & drop your MP4 video here</p>
+        </div>
+        <input type="file" id="file-input" accept="video/mp4">
+
+        <div id="status-box" class="status-box">
+            <h3>Processing Status</h3>
+            <p id="status-message">Initializing...</p>
+            <div class="progress-bar">
+                <div id="progress"></div>
+            </div>
+        </div>
+
+        <div id="results" class="results">
+            <h3>Processing Complete!</h3>
+            <p>Your files are ready for download.</p>
+            <div id="download-links"></div>
+        </div>
+
+        <div id="error-box" class="error">
+            <h3>An Error Occurred</h3>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const runpodUrlInput = document.getElementById('runpod-url');
+        
+        const statusBox = document.getElementById('status-box');
+        const statusMessage = document.getElementById('status-message');
+        const progress = document.getElementById('progress');
+        
+        const resultsBox = document.getElementById('results');
+        const downloadLinks = document.getElementById('download-links');
+        
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+
+        let POLLING_INTERVAL;
+
+        // --- Event Listeners ---
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#e9ecef';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = 'transparent';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = 'transparent';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // --- Core Logic ---
+        async function handleFileSelect(file) {
+            resetUI();
+            const runpodUrl = runpodUrlInput.value;
+            if (!runpodUrl) {
+                showError("Please enter the RunPod API URL first.");
+                return;
+            }
+            if (file.type !== "video/mp4") {
+                showError("Invalid file type. Please select an MP4 video.");
+                return;
+            }
+
+            statusBox.style.display = 'block';
+            statusMessage.textContent = 'Requesting upload URL...';
+
+            try {
+                // 1. Get Presigned URL from our handler
+                const uploadConfig = await getUploadConfig(file.name, runpodUrl);
+                if (!uploadConfig) return;
+
+                // 2. Upload file directly to S3
+                await uploadFileToS3(file, uploadConfig.presignedUrl);
+
+                // 3. Start processing on RunPod
+                const { jobId } = await startProcessing(uploadConfig.fileKey, runpodUrl);
+                if (!jobId) return;
+
+                // 4. Start polling for results
+                pollForJobStatus(jobId, runpodUrl);
+
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        async function getUploadConfig(fileName, runpodUrl) {
+            try {
+                const response = await fetch(runpodUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        input: { endpoint: 'start_upload', fileName }
+                    })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                if (!data.presignedUrl || !data.fileKey) throw new Error("Invalid response from start_upload endpoint.");
+                
+                statusMessage.textContent = 'Upload URL received. Uploading file...';
+                return { presignedUrl: data.presignedUrl, fileKey: data.fileKey };
+            } catch (err) {
+                showError(`Failed to get upload URL: ${err.message}`);
+                return null;
+            }
+        }
+
+        function uploadFileToS3(file, presignedUrl) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', presignedUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type);
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        progress.style.width = percentComplete + '%';
+                        statusMessage.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        statusMessage.textContent = 'Upload complete. Starting processing...';
+                        resolve();
+                    } else {
+                        reject(new Error(`Upload failed with status: ${xhr.status} - ${xhr.responseText}`));
+                    }
+                };
+
+                xhr.onerror = () => reject(new Error('Network error during file upload.'));
+                
+                xhr.send(file);
+            });
+        }
+
+        async function startProcessing(fileKey, runpodUrl) {
+            try {
+                const response = await fetch(runpodUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        input: { endpoint: 'start_processing', fileKey }
+                    })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                if (!data.job_id) throw new Error("Invalid response from start_processing endpoint.");
+                
+                statusMessage.textContent = `Processing started. Job ID: ${data.job_id}`;
+                return { jobId: data.job_id };
+            } catch (err) {
+                showError(`Failed to start processing: ${err.message}`);
+                return {};
+            }
+        }
+
+        function pollForJobStatus(jobId, runpodUrl) {
+            statusMessage.textContent = 'Waiting for worker to start...';
+            progress.style.width = '0%';
+            progress.style.backgroundColor = '#ffc107'; // Yellow for processing
+
+            POLLING_INTERVAL = setInterval(async () => {
+                try {
+                    const response = await fetch(runpodUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            input: { endpoint: 'status', job_id: jobId }
+                        })
+                    });
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    statusMessage.textContent = `Status: ${data.status}`;
+
+                    if (data.status === 'complete') {
+                        clearInterval(POLLING_INTERVAL);
+                        progress.style.width = '100%';
+                        progress.style.backgroundColor = '#28a745'; // Green for complete
+                        showResults(data);
+                    } else if (data.status === 'failed') {
+                        clearInterval(POLLING_INTERVAL);
+                        progress.style.backgroundColor = '#dc3545'; // Red for failed
+                        throw new Error(data.error || 'Job failed without a specific error message.');
+                    }
+
+                } catch (err) {
+                    clearInterval(POLLING_INTERVAL);
+                    showError(`Polling failed: ${err.message}`);
+                }
+            }, 10000); // Poll every 10 seconds
+        }
+
+        // --- UI Helper Functions ---
+        function resetUI() {
+            statusBox.style.display = 'none';
+            resultsBox.style.display = 'none';
+            errorBox.style.display = 'none';
+            downloadLinks.innerHTML = '';
+            progress.style.width = '0%';
+            progress.style.backgroundColor = '#007bff';
+            if (POLLING_INTERVAL) clearInterval(POLLING_INTERVAL);
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorBox.style.display = 'block';
+            statusBox.style.display = 'none';
+        }
+
+        function showResults(data) {
+            statusBox.style.display = 'none';
+            resultsBox.style.display = 'block';
+            
+            if (data.result_pkl_url) {
+                const link = document.createElement('a');
+                link.href = data.result_pkl_url;
+                link.textContent = 'Download PKL File';
+                link.target = '_blank';
+                downloadLinks.appendChild(link);
+            }
+            if (data.result_video_url) {
+                const link = document.createElement('a');
+                link.href = data.result_video_url;
+                link.textContent = 'Download Video Animation';
+                link.target = '_blank';
+                link.style.marginLeft = '1rem';
+                downloadLinks.appendChild(link);
+            }
+        }
+    </script>
+</body>
+</html>

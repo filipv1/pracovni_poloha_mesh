@@ -1,0 +1,128 @@
+================================================================================
+                      V3 SERVERLESS - START HERE
+================================================================================
+
+Vytvořil jsem kompletní V3 architekturu pro zpracování videí bez omezení!
+
+## CO JSEM UDĚLAL:
+
+✅ Vytvořil kompletní serverless_v3 složku s:
+   - Backend (RunPod handler + R2/S3 storage)
+   - Frontend (HTML s polling mechanismem)
+   - Docker image konfigurace
+   - Automatický setup wizard
+   - Test skripty
+
+✅ Opravil všechny nalezené chyby:
+   - Unicode znaky ve Windows konzoli
+   - Python import cesty
+   - Handler import processing pipeline
+
+✅ Připravil 3 způsoby nasazení:
+   1. AUTOMATICKÝ (nejjednodušší)
+   2. QUICK START guide (10 minut)
+   3. Detailní manuál
+
+================================================================================
+                          JAK ZAČÍT - 2 KROKY
+================================================================================
+
+KROK 1: SPUSŤTE AUTOMATICKÝ SETUP (doporučeno!)
+------------------------------------------------
+cd serverless_v3
+python setup_wizard.py
+
+Wizard vás provede:
+→ Nastavení CloudFlare R2 (nebo AWS S3)
+→ Konfigurace RunPod
+→ Build Docker image
+→ Konfigurace frontendu
+→ Test funkčnosti
+
+KROK 2: NEBO POUŽIJTE QUICK START GUIDE
+----------------------------------------
+Otevřete: serverless_v3/QUICK_START.md
+
+Manuální setup za 10 minut s copy-paste instrukcemi.
+
+================================================================================
+                         CO POTŘEBUJETE
+================================================================================
+
+1. CloudFlare účet (ZDARMA registrace)
+   → https://dash.cloudflare.com/sign-up
+
+2. RunPod účet (+ kredit ~$10 na testování)
+   → https://www.runpod.io/console/signup
+
+3. Docker (pouze pokud chcete buildovat vlastní image)
+   → Můžete použít můj: vaclavik/ergonomic-analysis-v3
+
+================================================================================
+                     STRUKTURA SOUBORŮ
+================================================================================
+
+serverless_v3/
+├── setup_wizard.py         ← ZAČNĚTE TADY! Automatický setup
+├── QUICK_START.md          ← Rychlý manuální návod (10 min)
+├── test_deployment.py      ← Test po nasazení
+├── frontend/
+│   └── index.html          ← Webové rozhraní
+├── runpod/
+│   ├── handler_v3.py       ← Async handler pro RunPod
+│   └── s3_utils.py         ← Storage funkce
+├── config/
+│   └── config.py           ← Konfigurace
+└── Dockerfile              ← Docker image
+
+================================================================================
+                      CENY A LIMITY
+================================================================================
+
+CENY:
+- 10 min video = ~$0.08 (RunPod GPU)
+- Storage = $0.015/GB/měsíc (R2)
+- Download = ZDARMA! (R2 výhoda)
+
+LIMITY:
+- Žádné! Podporuje GB+ videa
+- Žádné timeouty (async processing)
+- Škáluje automaticky (RunPod workers)
+
+================================================================================
+                    TESTOVÁNÍ
+================================================================================
+
+Po setupu spusťte:
+
+python test_deployment.py
+
+Otestuje:
+→ R2/S3 připojení
+→ RunPod endpoint
+→ Frontend konfiguraci
+→ Celý pipeline
+
+================================================================================
+                       PROBLÉMY?
+================================================================================
+
+1. "Module not found" → pip install boto3
+2. "Connection failed" → Zkontrolujte credentials v .env
+3. "Endpoint not found" → Ověřte RunPod deployment
+
+Detailní troubleshooting:
+→ DEPLOYMENT_README.md
+→ test_report.txt (po spuštění testu)
+
+================================================================================
+                     HOTOVO! 🚀
+================================================================================
+
+Máte vše připraveno pro zpracování videí libovolné velikosti!
+
+1. Spusťte: python setup_wizard.py
+2. Následujte instrukce
+3. Otevřete frontend a začněte!
+
+Hodně štěstí!

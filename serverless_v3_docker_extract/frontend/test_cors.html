@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Test</title>
+</head>
+<body>
+    <h1>Testing RunPod API</h1>
+    <button onclick="testAPI()">Test API Call</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...';
+
+            const RUNPOD_ENDPOINT = 'https://api.runpod.ai/v2/d1mtcfjymab45g/runsync';
+            const RUNPOD_API_KEY = 'YOUR_RUNPOD_API_KEY_HERE';
+
+            try {
+                const response = await fetch(RUNPOD_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${RUNPOD_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        input: {
+                            action: 'generate_upload_url',
+                            filename: 'test.mp4'
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                output.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+
+                // Try with mode: 'no-cors'
+                output.textContent += '\n\nTrying with no-cors mode...';
+
+                try {
+                    const response2 = await fetch(RUNPOD_ENDPOINT, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: {
+                            'Authorization': `Bearer ${RUNPOD_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            input: {
+                                action: 'generate_upload_url',
+                                filename: 'test.mp4'
+                            }
+                        })
+                    });
+
+                    output.textContent += '\nno-cors request sent (but cannot read response)';
+                } catch (error2) {
+                    output.textContent += '\nno-cors also failed: ' + error2.message;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

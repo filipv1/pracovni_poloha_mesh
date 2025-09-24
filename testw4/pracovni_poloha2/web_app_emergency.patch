@@ -1,0 +1,8 @@
+--- EMERGENCY PATCH pro web_app.py ---
+Přidej tyto 2 řádky na začátek web_app.py (hned po importech):
+
+# EMERGENCY FIX - sníží memory a network usage
+import emergency_fix
+
+A změň Procfile na:
+web: gunicorn web_app:app --timeout 3600 --workers 1 --worker-class sync --bind 0.0.0.0:$PORT --max-requests 100 --max-requests-jitter 20

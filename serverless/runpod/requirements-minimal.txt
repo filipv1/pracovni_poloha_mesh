@@ -1,0 +1,18 @@
+# Minimal requirements for testing - without version conflicts
+mediapipe
+opencv-python
+numpy
+scipy
+matplotlib
+tqdm
+Pillow
+smplx
+trimesh
+open3d
+chumpy
+imageio
+imageio-ffmpeg
+runpod
+pandas
+openpyxl
+joblib
