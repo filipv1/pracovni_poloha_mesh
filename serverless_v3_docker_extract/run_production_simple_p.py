@@ -46,6 +46,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 import warnings
 import argparse
+from skeleton_visualizer import SkeletonVisualizer
 
 warnings.filterwarnings('ignore')
 
@@ -546,7 +547,84 @@ class MasterPipeline:
         print(f"Phase 2 complete. Generated {len(list_of_mesh_results)} meshes.")
         return mesh_sequence
 
-    def execute_parallel_pipeline(self, video_path, output_dir="production_output_p", 
+    def _phase3_generate_skeleton_video(self, video_path, all_landmarks, output_path, max_frames=None, frame_skip=1):
+        """
+        Phase 3: Generate MediaPipe skeleton video overlay on original video
+        """
+        print()
+        print("PHASE 3: Generating MediaPipe Skeleton Video...")
+        print("-" * 70)
+
+        skeleton_visualizer = SkeletonVisualizer()
+
+        # Open input video
+        cap = cv2.VideoCapture(str(video_path))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        if max_frames:
+            total_frames = min(total_frames, max_frames)
+
+        # Setup output video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(str(output_path), fourcc, fps // max(1, frame_skip), (width, height))
+
+        print(f"  Input video: {width}x{height} @ {fps} FPS, {total_frames} frames")
+        print(f"  Output video: {output_path}")
+
+        # Process with MediaPipe for 2D landmarks (for visualization)
+        pose = self.mp_pose.Pose(
+            static_image_mode=False,
+            smooth_landmarks=True,
+            model_complexity=2,
+            enable_segmentation=False,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+
+        frame_idx = 0
+        processed_frames = 0
+
+        while frame_idx < total_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_idx % frame_skip != 0:
+                frame_idx += 1
+                continue
+
+            # Get 2D landmarks for visualization
+            results = pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+
+            # Draw skeleton if landmarks detected
+            if results.pose_landmarks:
+                frame_with_skeleton = skeleton_visualizer.draw_skeleton(
+                    frame, results.pose_landmarks, highlight_trunk=True
+                )
+            else:
+                frame_with_skeleton = frame
+
+            # Write frame to output video
+            out.write(frame_with_skeleton)
+            processed_frames += 1
+
+            progress = (frame_idx + 1) / total_frames * 100
+            print(f"  Frame {frame_idx+1:4d}/{total_frames} ({progress:5.1f}%) - Skeleton: {'OK' if results.pose_landmarks else 'FAIL'}")
+
+            frame_idx += 1
+
+        # Cleanup
+        cap.release()
+        out.release()
+        pose.close()
+
+        print(f"Phase 3 complete. Generated skeleton video with {processed_frames} frames.")
+        return output_path
+
+    def execute_parallel_pipeline(self, video_path, output_dir="production_output_p",
                                   max_frames=None, frame_skip=1, quality='high'):
         start_time = time.time()
         video_path = Path(video_path)
@@ -601,18 +679,50 @@ class MasterPipeline:
             with open(stats_file, 'w') as f:
                 json.dump(self.stats, f, indent=2)
             print(f"Statistics saved: {stats_file}")
-            
+
+            # Generate MediaPipe skeleton video
+            skeleton_video = output_dir / f"{video_path.stem}_skeleton.mp4"
+            self._phase3_generate_skeleton_video(
+                video_path, all_landmarks, skeleton_video, max_frames, frame_skip
+            )
+
             output_video = output_dir / f"{video_path.stem}_3d_animation.mp4"
             effective_fps = max(1, fps // frame_skip)
             self.visualizer.create_professional_video(mesh_sequence, str(output_video), fps=effective_fps, quality=quality)
-            
+
             print()
             print(f"SUCCESS! All outputs generated in: {output_dir}")
-            return {'mesh_sequence': mesh_sequence, 'mesh_file': mesh_file, 'video_file': output_video, 'stats': self.stats, 'output_dir': output_dir}
+            return {
+                'mesh_sequence': mesh_sequence,
+                'mesh_file': mesh_file,
+                'video_file': output_video,
+                'skeleton_video': skeleton_video,
+                'stats': self.stats,
+                'output_dir': output_dir
+            }
         else:
             print()
-            print("FAILED: No meshes were generated")
-            return None
+            print("FAILED: No meshes were generated, but generating skeleton video...")
+
+            # Generate MediaPipe skeleton video even if meshes failed
+            cap = cv2.VideoCapture(str(video_path))
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            cap.release()
+
+            skeleton_video = output_dir / f"{video_path.stem}_skeleton.mp4"
+            self._phase3_generate_skeleton_video(
+                video_path, all_landmarks, skeleton_video, max_frames, frame_skip
+            )
+
+            print(f"Skeleton video saved: {skeleton_video}")
+            return {
+                'skeleton_video': skeleton_video,
+                'stats': self.stats,
+                'output_dir': output_dir,
+                'mesh_sequence': None,
+                'mesh_file': None,
+                'video_file': None
+            }
 
 
 def main():

@@ -8,13 +8,14 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import requests
 import json
+import os
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST', 'PUT', 'OPTIONS'], allow_headers='*')
 
 # RunPod configuration
 RUNPOD_ENDPOINT = "https://api.runpod.ai/v2/d1mtcfjymab45g/runsync"
-RUNPOD_API_KEY = "YOUR_RUNPOD_API_KEY_HERE"
+RUNPOD_API_KEY = os.getenv('RUNPOD_API_KEY', '')
 
 @app.route('/runpod', methods=['POST', 'OPTIONS'])
 def proxy_runpod():
